@@ -7,9 +7,9 @@ interface HeroProps {
   onSignupClick?: () => void;
 }
 
-const Hero: React.FC<HeroProps> = ({ onLoginClick, onSignupClick }) => {
+const Hero: React.FC<HeroProps> = () => {
   return (
-    <section className="relative bg-gradient-to-br from-gray-50 via-blue-50 to-gray-50 py-20 lg:py-32 overflow-hidden">
+    <section className="relative bg-gradient-to-br from-gray-50 via-blue-50 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-20 lg:py-32 overflow-hidden">
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-600 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob"></div>
@@ -26,40 +26,40 @@ const Hero: React.FC<HeroProps> = ({ onLoginClick, onSignupClick }) => {
           </div>
 
           {/* Main Heading */}
-          <h1 className="text-5xl lg:text-7xl font-bold text-gray-900 mb-8 leading-tight">
+          <h1 className="text-5xl lg:text-7xl font-bold text-gray-900 dark:text-white mb-8 leading-tight">
             Simplifiez votre
-            <span className="text-blue-600 block">
+            <span className="text-blue-600 dark:text-blue-400 block">
               gestion locative
             </span>
           </h1>
 
           {/* Subtitle */}
-          <p className="text-xl lg:text-2xl text-gray-600 mb-12 max-w-4xl mx-auto leading-relaxed">
+          <p className="text-xl lg:text-2xl text-gray-600 dark:text-gray-300 mb-12 max-w-4xl mx-auto leading-relaxed">
             Plateforme complète de gestion locative pour 
-            <span className="font-semibold text-gray-900"> gérer vos biens</span>, 
-            <span className="font-semibold text-gray-900"> automatiser vos tâches</span> et 
-            <span className="font-semibold text-gray-900"> optimiser votre rentabilité</span>.
+            <span className="font-semibold text-gray-900 dark:text-white"> gérer vos biens</span>, 
+            <span className="font-semibold text-gray-900 dark:text-white"> automatiser vos tâches</span> et 
+            <span className="font-semibold text-gray-900 dark:text-white"> optimiser votre rentabilité</span>.
           </p>
 
           {/* Key Benefits */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 max-w-4xl mx-auto">
-            <div className="flex items-center justify-center space-x-3 bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Zap className="h-5 w-5 text-blue-600" />
+            <div className="flex items-center justify-center space-x-3 bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <span className="font-semibold text-gray-900">Automatisation</span>
+              <span className="font-semibold text-gray-900 dark:text-white">Automatisation</span>
             </div>
-            <div className="flex items-center justify-center space-x-3 bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-green-600" />
+            <div className="flex items-center justify-center space-x-3 bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
-              <span className="font-semibold text-gray-900">Conformité garantie</span>
+              <span className="font-semibold text-gray-900 dark:text-white">Conformité garantie</span>
             </div>
-            <div className="flex items-center justify-center space-x-3 bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Shield className="h-5 w-5 text-gray-600" />
+            <div className="flex items-center justify-center space-x-3 bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                <Shield className="h-5 w-5 text-gray-600 dark:text-gray-400" />
               </div>
-              <span className="font-semibold text-gray-900">Sécurité maximale</span>
+              <span className="font-semibold text-gray-900 dark:text-white">Sécurité maximale</span>
             </div>
           </div>
 
@@ -67,64 +67,50 @@ const Hero: React.FC<HeroProps> = ({ onLoginClick, onSignupClick }) => {
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-12">
             <Link
               to="/login?mode=signup"
-              className="bg-blue-600 text-white px-10 py-4 rounded-lg hover:bg-blue-700 transition-all duration-200 font-semibold text-lg shadow-sm hover:shadow-md flex items-center group"
+              className="bg-blue-600 dark:bg-blue-500 text-white px-10 py-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-all duration-200 font-semibold text-lg shadow-sm hover:shadow-md flex items-center group"
             >
-              <span>Démarrer gratuitement</span>
-              <ArrowRight className="ml-3 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              Commencer gratuitement
+              <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <button
-              className="border border-gray-300 text-gray-700 px-10 py-4 rounded-lg hover:bg-gray-50 hover:text-blue-600 transition-all duration-200 font-semibold text-lg flex items-center group"
-            >
-              <Play className="mr-3 h-5 w-5 group-hover:scale-110 transition-transform" />
-              <span>Voir la démo</span>
+            <button className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-10 py-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200 font-semibold text-lg flex items-center group">
+              <Play className="mr-2 h-5 w-5" />
+              Voir la démo
             </button>
           </div>
 
           {/* Social Proof */}
-          <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">
-            <p className="text-sm text-gray-600 mb-6 font-medium">Rejoignez plus de 50 000 propriétaires qui nous font confiance</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center opacity-70">
-              <div className="text-gray-500 font-bold text-lg">ORPI</div>
-              <div className="text-gray-500 font-bold text-lg">CENTURY 21</div>
-              <div className="text-gray-500 font-bold text-lg">FONCIA</div>
-              <div className="text-gray-500 font-bold text-lg">NEXITY</div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-4">PLUS DE 2 000 PROPRIÉTAIRES NOUS FONT CONFIANCE</p>
+            <div className="flex items-center justify-center space-x-8">
+              {[1, 2, 3, 4, 5].map((_, index) => (
+                <div key={index} className="flex items-center">
+                  <Star className="h-5 w-5 text-yellow-400 fill-current" />
+                </div>
+              ))}
+              <span className="text-2xl font-bold text-gray-900 dark:text-white ml-4">4.9/5</span>
+              <span className="text-gray-600 dark:text-gray-400 ml-2">(523 avis)</span>
             </div>
-            <div className="mt-6 flex justify-center items-center space-x-6 text-sm text-gray-600">
-              <div className="flex items-center">
-                <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                <span className="font-semibold">4.9/5</span>
-                <span className="ml-1">sur Trustpilot</span>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-8 items-center opacity-60">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900 dark:text-white">+50%</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Gain de temps</div>
               </div>
-              <div className="flex items-center">
-                <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
-                <span>99.9% de disponibilité</span>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900 dark:text-white">99.9%</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Disponibilité</div>
               </div>
-              <div className="flex items-center">
-                <Shield className="h-4 w-4 text-blue-500 mr-1" />
-                <span>Certifié ISO 27001</span>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900 dark:text-white">24/7</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Support</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900 dark:text-white">2k+</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Utilisateurs</div>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
-      <style jsx>{`
-        @keyframes blob {
-          0% { transform: translate(0px, 0px) scale(1); }
-          33% { transform: translate(30px, -50px) scale(1.1); }
-          66% { transform: translate(-20px, 20px) scale(0.9); }
-          100% { transform: translate(0px, 0px) scale(1); }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
     </section>
   );
 };

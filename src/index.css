@@ -1,9 +1,9 @@
+/* Import custom animations */
+@import './styles/animations.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import custom animations */
-@import './styles/animations.css';
 
 /* Custom animations */
 @keyframes blob {
@@ -48,9 +48,26 @@ html {
   background: #94a3b8;
 }
 
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
 /* Enhanced shadows */
 /* Improved focus states */
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
 }
 
+/* Dark mode focus ring offset */
+.dark .focus-ring {
+  @apply focus:ring-offset-gray-800;
+}

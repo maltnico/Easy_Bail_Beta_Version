@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Search, User, ChevronDown, LogOut, Shield, X, FileText, Building, Users, DollarSign, Moon, Sun, Monitor } from 'lucide-react';
-import { AuthUser, useAuth } from '../../hooks/useAuth';
-import { useTheme } from '../../hooks/useTheme';
+import { Search, User, ChevronDown, LogOut, Shield, X, FileText, Building, Users, DollarSign } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 import NotificationBell from './NotificationBell';
 import AdminMenu from './AdminMenu';
 import { useProperties } from '../../hooks/useProperties';
 import { useTenants } from '../../hooks/useTenants';
-import { useNavigate } from 'react-router-dom';
+import { SimpleThemeToggle } from '../ThemeToggle';
 
 interface TopBarProps {
   onLogout?: () => void;
@@ -35,13 +34,10 @@ const isUserAdmin = (user: any): boolean => {
 
 const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
   const { user, profile, signOut } = useAuth();
-  const { theme, effectiveTheme, setTheme } = useTheme();
   const { properties } = useProperties();
   const { tenants } = useTenants();
-  const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
-  const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -168,13 +164,6 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
     setShowSearchResults(false);
   };
 
-  const getThemeIcon = () => {
-    if (theme === 'auto') return Monitor;
-    return effectiveTheme === 'dark' ? Moon : Sun;
-  };
-
-  const ThemeIcon = getThemeIcon();
-
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'property': return 'Bien';
@@ -185,24 +174,24 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
+    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
       <div className="flex items-center justify-between">
         {/* Search */}
         <div className="flex-1 max-w-lg">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
               placeholder="Rechercher un bien, locataire, document..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
             />
             {searchQuery && (
               <button
                 onClick={clearSearch}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -210,10 +199,10 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
             
             {/* Résultats de recherche */}
             {showSearchResults && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 max-h-96 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50 max-h-96 overflow-y-auto">
                 {searchResults.length > 0 ? (
                   <>
-                    <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                    <div className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-100 dark:border-gray-700">
                       Résultats de recherche
                     </div>
                     {searchResults.map((result, index) => {
@@ -222,20 +211,20 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
                         <button
                           key={`${result.type}-${result.id}-${index}`}
                           onClick={result.action}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+                          className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors"
                         >
-                          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Icon className="h-4 w-4 text-gray-600" />
+                          <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Icon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                               {result.title}
                             </p>
-                            <p className="text-xs text-gray-500 truncate">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                               {result.subtitle}
                             </p>
                           </div>
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+                          <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
                             {getTypeLabel(result.type)}
                           </span>
                         </button>
@@ -244,17 +233,17 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
                   </>
                 ) : (
                   <div className="px-4 py-8 text-center">
-                    <Search className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Aucun résultat trouvé</p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <Search className="h-8 w-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Aucun résultat trouvé</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                       Essayez avec d'autres mots-clés
                     </p>
                   </div>
                 )}
                 
                 {searchResults.length > 0 && (
-                  <div className="border-t border-gray-100 px-4 py-2">
-                    <p className="text-xs text-gray-500">
+                  <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {searchResults.length} résultat(s) trouvé(s)
                     </p>
                   </div>
@@ -275,62 +264,13 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
         {/* Right side */}
         <div className="flex items-center space-x-4">
           {/* Theme Toggle */}
-          <div className="relative">
-            <button
-              onClick={() => setShowThemeMenu(!showThemeMenu)}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-50"
-              title="Changer le thème"
-            >
-              <ThemeIcon className="h-5 w-5" />
-            </button>
-
-            {showThemeMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                <button
-                  onClick={() => {
-                    setTheme('light');
-                    setShowThemeMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center ${
-                    theme === 'light' ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
-                  }`}
-                >
-                  <Sun className="h-4 w-4 mr-3" />
-                  Clair
-                </button>
-                <button
-                  onClick={() => {
-                    setTheme('dark');
-                    setShowThemeMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center ${
-                    theme === 'dark' ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
-                  }`}
-                >
-                  <Moon className="h-4 w-4 mr-3" />
-                  Foncé
-                </button>
-                <button
-                  onClick={() => {
-                    setTheme('auto');
-                    setShowThemeMenu(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center ${
-                    theme === 'auto' ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
-                  }`}
-                >
-                  <Monitor className="h-4 w-4 mr-3" />
-                  Automatique
-                </button>
-              </div>
-            )}
-          </div>
-
+          <SimpleThemeToggle />
+          
           {/* Admin Button */}
           {userIsAdmin && (
             <button
               onClick={() => setShowAdminMenu(true)}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title="Administration"
             >
               <Shield className="h-6 w-6" />
@@ -343,24 +283,24 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                 <User className="h-5 w-5 text-white" />
               </div>
               <div className="text-left">
-                <div className="text-sm font-medium text-gray-900">
+                <div className="text-sm font-medium text-gray-900 dark:text-white">
                   {profile?.first_name} {profile?.last_name}
                 </div>
-                <div className="text-xs text-gray-500 capitalize">
+                <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">
                   {profile?.plan && `Plan ${profile?.plan}`}
                 </div>
               </div>
-              <ChevronDown className="h-4 w-4 text-gray-400" />
+              <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" />
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
                 <button
                   onClick={() => {
                     if (onNavigateToSection) {
@@ -368,7 +308,7 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
                     }
                     setShowUserMenu(false);
                   }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Mon profil
                 </button>
@@ -379,7 +319,7 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
                     }
                     setShowUserMenu(false);
                   }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Paramètres
                 </button>
@@ -390,14 +330,14 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
                     }
                     setShowUserMenu(false);
                   }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Facturation
                 </button>
-                <hr className="my-2" />
+                <hr className="my-2 border-gray-200 dark:border-gray-600" />
                 <button
                   onClick={handleSignOut}
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center"
                 >
                   <LogOut className="h-4 w-4 mr-2" />
                   Se déconnecter

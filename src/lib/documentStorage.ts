@@ -186,7 +186,7 @@ class DocumentStorage {
         .from('documents')
         .select('id')
         .eq('id', document.id)
-        .maybeSingle();
+        .single();
 
       if (existingDoc) {
         // Mettre à jour le document existant
