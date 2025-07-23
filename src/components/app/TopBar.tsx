@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Search, User, ChevronDown, LogOut, Shield, X, FileText, Building, Users, DollarSign } from 'lucide-react';
+import { Search, User, ChevronDown, LogOut, Shield, X, FileText, Building, Users, DollarSign, Moon, Sun, Monitor } from 'lucide-react';
 import { AuthUser, useAuth } from '../../hooks/useAuth';
+import { useTheme } from '../../hooks/useTheme';
 import NotificationBell from './NotificationBell';
 import AdminMenu from './AdminMenu';
 import { useProperties } from '../../hooks/useProperties';
@@ -34,11 +35,13 @@ const isUserAdmin = (user: any): boolean => {
 
 const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
   const { user, profile, signOut } = useAuth();
+  const { theme, effectiveTheme, setTheme } = useTheme();
   const { properties } = useProperties();
   const { tenants } = useTenants();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -165,6 +168,13 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
     setShowSearchResults(false);
   };
 
+  const getThemeIcon = () => {
+    if (theme === 'auto') return Monitor;
+    return effectiveTheme === 'dark' ? Moon : Sun;
+  };
+
+  const ThemeIcon = getThemeIcon();
+
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'property': return 'Bien';
@@ -264,6 +274,58 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
 
         {/* Right side */}
         <div className="flex items-center space-x-4">
+          {/* Theme Toggle */}
+          <div className="relative">
+            <button
+              onClick={() => setShowThemeMenu(!showThemeMenu)}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-50"
+              title="Changer le thème"
+            >
+              <ThemeIcon className="h-5 w-5" />
+            </button>
+
+            {showThemeMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                <button
+                  onClick={() => {
+                    setTheme('light');
+                    setShowThemeMenu(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center ${
+                    theme === 'light' ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
+                  }`}
+                >
+                  <Sun className="h-4 w-4 mr-3" />
+                  Clair
+                </button>
+                <button
+                  onClick={() => {
+                    setTheme('dark');
+                    setShowThemeMenu(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center ${
+                    theme === 'dark' ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
+                  }`}
+                >
+                  <Moon className="h-4 w-4 mr-3" />
+                  Foncé
+                </button>
+                <button
+                  onClick={() => {
+                    setTheme('auto');
+                    setShowThemeMenu(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center ${
+                    theme === 'auto' ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
+                  }`}
+                >
+                  <Monitor className="h-4 w-4 mr-3" />
+                  Automatique
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Admin Button */}
           {userIsAdmin && (
             <button
