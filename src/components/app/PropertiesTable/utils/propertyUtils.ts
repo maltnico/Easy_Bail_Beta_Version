@@ -1,59 +1,56 @@
-export const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'occupied':
-      return 'bg-green-100 text-green-800 border-green-200';
-    case 'vacant':
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    case 'maintenance':
-      return 'bg-red-100 text-red-800 border-red-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
+import { Home, Building, Car, Store, Building2 } from 'lucide-react';
+
+export const getTypeLabel = (type: string): string => {
+  const typeLabels = {
+    apartment: 'Appartement',
+    house: 'Maison',
+    studio: 'Studio',
+    parking: 'Parking',
+    commercial: 'Commercial',
+  };
+  return typeLabels[type as keyof typeof typeLabels] || type;
 };
 
-export const getStatusLabel = (status: string) => {
-  switch (status) {
-    case 'occupied':
-      return 'Occupé';
-    case 'vacant':
-      return 'Vacant';
-    case 'maintenance':
-      return 'Maintenance';
-    default:
-      return status;
-  }
+export const getTypeIcon = (type: string): string => {
+  const iconMap = {
+    apartment: '🏢', // Building emoji
+    house: '🏠',     // House emoji
+    studio: '🏘️',    // Houses emoji
+    parking: '🚗',   // Car emoji
+    commercial: '🏪', // Store emoji
+  };
+  return iconMap[type as keyof typeof iconMap] || '🏠';
 };
 
-export const getTypeLabel = (type: string) => {
-  switch (type) {
-    case 'apartment':
-      return 'Appartement';
-    case 'house':
-      return 'Maison';
-    case 'studio':
-      return 'Studio';
-    case 'parking':
-      return 'Parking';
-    case 'commercial':
-      return 'Commercial';
-    default:
-      return type;
-  }
+export const getPropertyIconComponent = (type: string) => {
+  const iconMap = {
+    apartment: Building,
+    house: Home,
+    studio: Building2,
+    parking: Car,
+    commercial: Store,
+  };
+  return iconMap[type as keyof typeof iconMap] || Home;
 };
 
-export const getTypeIcon = (type: string) => {
-  switch (type) {
-    case 'house':
-      return '🏠';
-    case 'apartment':
-      return '🏢';
-    case 'studio':
-      return '🏠';
-    case 'parking':
-      return '🚗';
-    case 'commercial':
-      return '🏪';
-    default:
-      return '🏠';
-  }
+export const getPropertyIconColor = (type: string): string => {
+  const colorMap = {
+    apartment: 'text-blue-600',
+    house: 'text-green-600',
+    studio: 'text-purple-600',
+    parking: 'text-gray-600',
+    commercial: 'text-orange-600',
+  };
+  return colorMap[type as keyof typeof colorMap] || 'text-gray-400';
+};
+
+export const getPropertyIconBg = (type: string): string => {
+  const bgMap = {
+    apartment: 'bg-blue-50',
+    house: 'bg-green-50',
+    studio: 'bg-purple-50',
+    parking: 'bg-gray-50',
+    commercial: 'bg-orange-50',
+  };
+  return bgMap[type as keyof typeof bgMap] || 'bg-gray-50';
 };

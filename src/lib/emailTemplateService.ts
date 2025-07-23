@@ -329,7 +329,6 @@ class EmailTemplateService {
         name: data.name,
         subject: data.subject,
         content: data.content,
-        type: data.type || 'html',
         category: data.category as any,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at)

@@ -28,20 +28,23 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
   const [formData, setFormData] = useState({
     name: property?.name || '',
     address: property?.address || '',
-    type: property?.type || 'apartment',
-    status: property?.status || 'vacant',
-    rent: property?.rent || 0,
-    charges: property?.charges || 0,
-    surface: property?.surface || 0,
-    rooms: property?.rooms || 1,
-    description: '',
-    amenities: [] as string[],
-    images: [] as string[]
+    city: property?.city || '',
+    postalCode: property?.postalCode || '',
+    type: property?.type || '',
+    status: property?.status || '',
+    rent: property?.rent || '',
+    charges: property?.charges || '',
+    surface: property?.surface || '',
+    rooms: property?.rooms || '',
+    description: property?.description || '',
+    amenities: property?.amenities || [] as string[],
+    images: property?.images || [] as string[]
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const propertyTypes = [
+    { value: '', label: 'Sélectionner un type' },
     { value: 'apartment', label: 'Appartement' },
     { value: 'house', label: 'Maison' },
     { value: 'studio', label: 'Studio' },
@@ -50,6 +53,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
   ];
 
   const propertyStatuses = [
+    { value: '', label: 'Sélectionner un statut' },
     { value: 'vacant', label: 'Vacant' },
     { value: 'occupied', label: 'Occupé' },
     { value: 'maintenance', label: 'En maintenance' }
@@ -65,9 +69,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'rent' || name === 'charges' || name === 'surface' || name === 'rooms' 
-        ? parseFloat(value) || 0 
-        : value
+      [name]: value
     }));
     
     // Clear error when user starts typing
@@ -94,13 +96,27 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
     if (!formData.address.trim()) {
       newErrors.address = 'L\'adresse est requise';
     }
-    if (formData.rent <= 0) {
+    if (!formData.city.trim()) {
+      newErrors.city = 'La ville est requise';
+    }
+    if (!formData.postalCode.trim()) {
+      newErrors.postalCode = 'Le code postal est requis';
+    } else if (!/^\d{5}$/.test(formData.postalCode.trim())) {
+      newErrors.postalCode = 'Le code postal doit contenir 5 chiffres';
+    }
+    if (!formData.type) {
+      newErrors.type = 'Le type de bien est requis';
+    }
+    if (!formData.status) {
+      newErrors.status = 'Le statut est requis';
+    }
+    if (!formData.rent || parseFloat(formData.rent) <= 0) {
       newErrors.rent = 'Le loyer doit être supérieur à 0';
     }
-    if (formData.surface <= 0) {
+    if (!formData.surface || parseFloat(formData.surface) <= 0) {
       newErrors.surface = 'La surface doit être supérieure à 0';
     }
-    if (formData.rooms <= 0) {
+    if (!formData.rooms || parseInt(formData.rooms) <= 0) {
       newErrors.rooms = 'Le nombre de pièces doit être supérieur à 0';
     }
     
@@ -115,6 +131,10 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
     
     const propertyToSave = {
       ...formData,
+      rent: parseFloat(formData.rent),
+      charges: parseFloat(formData.charges) || 0,
+      surface: parseFloat(formData.surface),
+      rooms: parseInt(formData.rooms),
       ...(property && { id: property.id }),
       ...(property && { createdAt: property.createdAt }),
       ...(property && { updatedAt: new Date() })
@@ -174,7 +194,9 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                 name="type"
                 value={formData.type}
                 onChange={handleInputChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.type ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                }`}
               >
                 {propertyTypes.map(type => (
                   <option key={type.value} value={type.value}>
@@ -182,13 +204,16 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                   </option>
                 ))}
               </select>
+              {errors.type && (
+                <p className="mt-1 text-sm text-red-600">{errors.type}</p>
+              )}
             </div>
           </div>
 
           {/* Address */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Adresse complète *
+              Adresse *
             </label>
             <div className="relative">
               <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -200,12 +225,54 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   errors.address ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}
-                placeholder="15 rue de la Roquette, 75011 Paris"
+                placeholder="15 rue de la Roquette"
               />
             </div>
             {errors.address && (
               <p className="mt-1 text-sm text-red-600">{errors.address}</p>
             )}
+          </div>
+
+          {/* City and Postal Code */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ville *
+              </label>
+              <input
+                type="text"
+                name="city"
+                value={formData.city}
+                onChange={handleInputChange}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.city ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                }`}
+                placeholder="Paris"
+              />
+              {errors.city && (
+                <p className="mt-1 text-sm text-red-600">{errors.city}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Code postal *
+              </label>
+              <input
+                type="text"
+                name="postalCode"
+                value={formData.postalCode}
+                onChange={handleInputChange}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.postalCode ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                }`}
+                placeholder="75011"
+                maxLength={5}
+              />
+              {errors.postalCode && (
+                <p className="mt-1 text-sm text-red-600">{errors.postalCode}</p>
+              )}
+            </div>
           </div>
 
           {/* Property Details */}
@@ -222,6 +289,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                   value={formData.surface}
                   onChange={handleInputChange}
                   min="1"
+                  step="0.1"
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.surface ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   }`}
@@ -303,13 +371,15 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
           {/* Status */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Statut du bien
+              Statut du bien *
             </label>
             <select
               name="status"
               value={formData.status}
               onChange={handleInputChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.status ? 'border-red-300 bg-red-50' : 'border-gray-300'
+              }`}
             >
               {propertyStatuses.map(status => (
                 <option key={status.value} value={status.value}>
@@ -317,6 +387,9 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                 </option>
               ))}
             </select>
+            {errors.status && (
+              <p className="mt-1 text-sm text-red-600">{errors.status}</p>
+            )}
           </div>
 
           {/* Description */}
@@ -342,7 +415,6 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {amenitiesList.map(amenity => (
                 <label key={amenity} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                <label key={amenity} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.amenities.includes(amenity)}
@@ -350,7 +422,6 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <span className="text-sm text-gray-700">{amenity}</span>
-                </label>
                 </label>
               ))}
             </div>

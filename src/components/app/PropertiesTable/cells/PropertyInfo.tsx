@@ -1,7 +1,7 @@
 import React from 'react';
 import { MapPin } from 'lucide-react';
 import { Property } from '../../../../types';
-import { getTypeIcon } from '../utils/propertyUtils';
+import { getPropertyIconComponent, getPropertyIconColor, getPropertyIconBg } from '../utils/propertyUtils';
 
 interface PropertyInfoProps {
   property: Property;
@@ -12,10 +12,16 @@ export const PropertyInfo: React.FC<PropertyInfoProps> = ({
   property,
   onToggleExpansion
 }) => {
+  const IconComponent = getPropertyIconComponent(property.type);
+  const iconColor = getPropertyIconColor(property.type);
+  const iconBg = getPropertyIconBg(property.type);
+
   return (
     <td className="py-4 px-6">
       <div className="flex items-start space-x-3">
-        <div className="text-2xl">{getTypeIcon(property.type)}</div>
+        <div className={`p-2 rounded-lg ${iconBg}`}>
+          <IconComponent className={`w-5 h-5 ${iconColor}`} />
+        </div>
         <div className="min-w-0 flex-1">
           <button
             onClick={onToggleExpansion}

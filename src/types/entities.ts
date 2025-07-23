@@ -3,12 +3,17 @@ export interface Property {
   id: string;
   name: string;
   address: string;
+  city: string;
+  postalCode: string;
   type: 'apartment' | 'house' | 'studio' | 'parking' | 'commercial';
   status: 'occupied' | 'vacant' | 'maintenance';
   rent: number;
   charges: number;
   surface: number;
   rooms: number;
+  description?: string;
+  amenities?: string[];
+  images?: string[];
   tenant?: Tenant;
   createdAt: Date;
   updatedAt: Date;

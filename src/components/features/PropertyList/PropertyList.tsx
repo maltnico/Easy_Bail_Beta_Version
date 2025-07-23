@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Home, MapPin } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Home, Building, Car, Store, Building2 } from 'lucide-react';
 import { useProperties } from '../../../hooks/data';
 import { Button, Table, Modal } from '../../ui';
 import PropertyForm from '../PropertyForm/PropertyForm';
@@ -15,6 +15,30 @@ const PropertyList: React.FC<PropertyListProps> = ({ onPropertySelect }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
+  // Fonction pour obtenir l'icône selon le type de bien
+  const getPropertyIcon = (type: string) => {
+    const iconMap = {
+      apartment: <Building className="w-5 h-5 text-blue-600" />,
+      house: <Home className="w-5 h-5 text-green-600" />,
+      studio: <Building2 className="w-5 h-5 text-purple-600" />,
+      parking: <Car className="w-5 h-5 text-gray-600" />,
+      commercial: <Store className="w-5 h-5 text-orange-600" />,
+    };
+    return iconMap[type as keyof typeof iconMap] || <Home className="w-5 h-5 text-gray-400" />;
+  };
+
+  // Fonction pour obtenir la couleur de fond selon le type
+  const getPropertyIconBg = (type: string) => {
+    const bgMap = {
+      apartment: 'bg-blue-50',
+      house: 'bg-green-50',
+      studio: 'bg-purple-50',
+      parking: 'bg-gray-50',
+      commercial: 'bg-orange-50',
+    };
+    return bgMap[type as keyof typeof bgMap] || 'bg-gray-50';
+  };
+
   const columns: TableColumn<Property>[] = [
     {
       key: 'name',
@@ -22,8 +46,8 @@ const PropertyList: React.FC<PropertyListProps> = ({ onPropertySelect }) => {
       sortable: true,
       render: (value, property) => (
         <div className="flex items-center space-x-3">
-          <div className="flex-shrink-0">
-            <Home className="w-5 h-5 text-gray-400" />
+          <div className={`flex-shrink-0 p-2 rounded-lg ${getPropertyIconBg(property.type)}`}>
+            {getPropertyIcon(property.type)}
           </div>
           <div>
             <div className="font-medium text-gray-900">{value}</div>
@@ -60,7 +84,13 @@ const PropertyList: React.FC<PropertyListProps> = ({ onPropertySelect }) => {
           vacant: { label: 'Vacant', color: 'bg-yellow-100 text-yellow-800' },
           maintenance: { label: 'Maintenance', color: 'bg-red-100 text-red-800' },
         };
-        const config = statusConfig[value as keyof typeof statusConfig];
+        
+        // Get config with fallback for unknown status values
+        const config = statusConfig[value as keyof typeof statusConfig] || {
+          label: value || 'Inconnu',
+          color: 'bg-gray-100 text-gray-800'
+        };
+        
         return (
           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${config.color}`}>
             {config.label}
@@ -72,18 +102,19 @@ const PropertyList: React.FC<PropertyListProps> = ({ onPropertySelect }) => {
       key: 'rent',
       label: 'Loyer',
       sortable: true,
-      render: (value) => `${value}€`,
+      render: (value) => `${value || 0}€`,
     },
     {
       key: 'surface',
       label: 'Surface',
       sortable: true,
-      render: (value) => `${value}m²`,
+      render: (value) => `${value || 0}m²`,
     },
     {
       key: 'rooms',
       label: 'Pièces',
       sortable: true,
+      render: (value) => value || 0,
     },
     {
       key: 'id',
@@ -164,7 +195,7 @@ const PropertyList: React.FC<PropertyListProps> = ({ onPropertySelect }) => {
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="text-2xl font-bold text-blue-600">
-            {properties.reduce((sum, p) => sum + p.rent, 0)}€
+            {properties.reduce((sum, p) => sum + (p.rent || 0), 0)}€
           </div>
           <div className="text-sm text-gray-600">Revenus mensuels</div>
         </div>

@@ -138,41 +138,6 @@ export const useAuth = (): UseAuthReturn => {
   // Function to fetch user profile
   const fetchUserProfile = async (userId: string) => {
     try {
-      // Ensure user profile exists before fetching
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user) {
-        // Check if profile exists, create if not
-        const { data: existingProfile, error: checkError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', userId)
-          .maybeSingle();
-        
-        if (checkError) {
-          console.error('Error checking user profile:', checkError);
-          return;
-        }
-        
-        if (!existingProfile) {
-          // Create profile if it doesn't exist
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: userId,
-              email: userData.user.email || '',
-              first_name: userData.user.user_metadata?.first_name || 'Utilisateur',
-              last_name: userData.user.user_metadata?.last_name || '',
-              company_name: userData.user.user_metadata?.company_name || null,
-              phone: userData.user.user_metadata?.phone || null
-            });
-          
-          if (insertError) {
-            console.error('Error creating user profile:', insertError);
-            return;
-          }
-        }
-      }
-      
       const { data, error } = await auth.getProfile(userId);
       
       if (error) {
