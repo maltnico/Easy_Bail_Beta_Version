@@ -18,6 +18,7 @@ export class PropertyService extends BaseService<Property, DatabaseProperty> {
       charges: dbProperty.charges,
       surface: dbProperty.surface,
       rooms: dbProperty.rooms,
+      amenities: dbProperty.amenities || [],
       createdAt: new Date(dbProperty.created_at),
       updatedAt: new Date(dbProperty.updated_at),
     };
@@ -41,6 +42,7 @@ export class PropertyService extends BaseService<Property, DatabaseProperty> {
     if (property.charges !== undefined) dbProperty.charges = property.charges;
     if (property.surface !== undefined) dbProperty.surface = property.surface;
     if (property.rooms !== undefined) dbProperty.rooms = property.rooms;
+    if (property.amenities !== undefined) dbProperty.amenities = property.amenities;
 
     return dbProperty;
   }
