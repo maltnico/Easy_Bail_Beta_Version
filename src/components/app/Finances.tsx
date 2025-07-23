@@ -33,7 +33,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useFinances } from '../../hooks/useFinances';
-import { useProperties } from '../../hooks/data';
+import { useProperties } from '../../hooks/useProperties';
 import { FinancialFlow, FinancialCategory } from '../../types/financial';
 import FinancialFlowForm from './FinancialFlowForm';
 import FinancialDashboard from './FinancialDashboard';

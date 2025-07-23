@@ -1,107 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
+  Users, 
   Plus, 
   Search, 
-  Filter, 
-  Users, 
-  Phone, 
+  Filter,
   Mail,
-  MapPin,
+  Phone,
   Calendar,
-  Edit3,
-  Trash2
+  DollarSign,
+  AlertTriangle,
+  CheckCircle,
+  Edit,
+  Trash2,
+  Eye,
+  FileText,
+  Clock,
+  MapPin,
+  Loader2
 } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
-import { useDatabase } from '../../hooks/useDatabase';
+import { useProperties } from '../../hooks/useProperties';
+import { useTenants } from '../../hooks/useTenants';
 import TenantForm from './TenantForm';
+import TenantDetails from './TenantDetails';
 
-interface Tenant {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone?: string;
-  property_name?: string;
-  lease_start?: string;
-  lease_end?: string;
-  rent: number;
-  status: 'active' | 'inactive' | 'pending' | 'terminated';
-}
+const Tenants = () => {
+  const { properties, loading: propertiesLoading } = useProperties();
+  const { 
+    tenants, 
+    loading, 
+    error, 
+    createTenant, 
+    updateTenant, 
+    deleteTenant 
+  } = useTenants();
 
-const Tenants: React.FC = () => {
-  const { user } = useAuth();
-  const { isConnected } = useDatabase();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadTenants();
-  }, []);
-
-  const loadTenants = async () => {
-    setLoading(true);
-    try {
-      // Simuler le chargement des locataires
-      const mockTenants: Tenant[] = [
-        {
-          id: '1',
-          first_name: 'Marie',
-          last_name: 'Dubois',
-          email: 'marie.dubois@email.com',
-          phone: '06 12 34 56 78',
-          property_name: 'Appartement A12 - 15 rue de la Paix',
-          lease_start: '2024-01-01',
-          lease_end: '2025-01-01',
-          rent: 850,
-          status: 'active'
-        },
-        {
-          id: '2',
-          first_name: 'Pierre',
-          last_name: 'Martin',
-          email: 'pierre.martin@email.com',
-          phone: '06 98 76 54 32',
-          property_name: 'Studio B5 - 8 avenue des Fleurs',
-          lease_start: '2024-03-15',
-          lease_end: '2025-03-15',
-          rent: 650,
-          status: 'active'
-        },
-        {
-          id: '3',
-          first_name: 'Sophie',
-          last_name: 'Bernard',
-          email: 'sophie.bernard@email.com',
-          phone: '06 11 22 33 44',
-          property_name: 'Maison C1 - 25 rue du Commerce',
-          lease_start: '2023-09-01',
-          lease_end: '2024-09-01',
-          rent: 1200,
-          status: 'terminated'
-        }
-      ];
-      
-      setTenants(mockTenants);
-    } catch (error) {
-      console.error('Erreur lors du chargement des locataires:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [showTenantForm, setShowTenantForm] = useState(false);
+  const [showTenantDetails, setShowTenantDetails] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState<any>(null);
+  const [editingTenant, setEditingTenant] = useState<any>(null);
 
   const filteredTenants = tenants.filter(tenant => {
     const matchesSearch = 
-      tenant.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.property_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || tenant.status === statusFilter;
-    
+      tenant.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tenant.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tenant.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || tenant.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -109,11 +54,9 @@ const Tenants: React.FC = () => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'terminated':
+      case 'notice':
         return 'bg-red-100 text-red-800';
-      case 'inactive':
+      case 'former':
         return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -124,186 +67,415 @@ const Tenants: React.FC = () => {
     switch (status) {
       case 'active':
         return 'Actif';
-      case 'pending':
-        return 'En attente';
-      case 'terminated':
-        return 'Terminé';
-      case 'inactive':
-        return 'Inactif';
+      case 'notice':
+        return 'Préavis';
+      case 'former':
+        return 'Ancien';
       default:
         return status;
     }
   };
 
-  const handleEditTenant = (tenant: Tenant) => {
-    setSelectedTenant(tenant);
-    setShowForm(true);
+  const getPropertyName = (propertyId: string) => {
+    const property = properties.find(p => p.id === propertyId);
+    return property?.name || 'Bien inconnu';
   };
 
-  const handleDeleteTenant = async (tenantId: string) => {
+  const getPropertyDetails = (propertyId: string) => {
+    const property = properties.find(p => p.id === propertyId);
+    return property || null;
+  };
+  const handleAddTenant = () => {
+    setEditingTenant(null);
+    setShowTenantForm(true);
+  };
+
+  const handleEditTenant = (tenant: any) => {
+    setEditingTenant(tenant);
+    setShowTenantForm(true);
+  };
+
+  const handleViewTenant = (tenant: any) => {
+    setSelectedTenant(tenant);
+    setShowTenantDetails(true);
+  };
+
+  const handleDeleteTenant = (tenantId: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce locataire ?')) {
-      try {
-        setTenants(tenants.filter(t => t.id !== tenantId));
-      } catch (error) {
-        console.error('Erreur lors de la suppression:', error);
-      }
+      deleteTenant(tenantId).catch(err => {
+        console.error('Erreur lors de la suppression:', err);
+      });
     }
   };
 
-  if (loading) {
+  const handleSaveTenant = async (tenantData: any) => {
+    try {
+      if (editingTenant) {
+        await updateTenant(editingTenant.id, tenantData);
+      } else {
+        await createTenant(tenantData);
+      }
+      setShowTenantForm(false);
+      setEditingTenant(null);
+    } catch (err) {
+      console.error('Erreur lors de la sauvegarde:', err);
+    }
+  };
+
+  const activeTenants = tenants.filter(t => t.status === 'active').length;
+  const noticeTenants = tenants.filter(t => t.status === 'notice').length;
+  const totalRent = tenants
+    .filter(t => t.status === 'active')
+    .reduce((sum, t) => sum + t.rent, 0);
+
+  const upcomingLeaseEnds = tenants
+    .filter(t => t.status === 'active')
+    .filter(t => {
+      const endDate = new Date(t.leaseEnd);
+      const threeMonthsFromNow = new Date();
+      threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+      return endDate <= threeMonthsFromNow;
+    });
+
+  // Afficher un loader si les données sont en cours de chargement
+  if (loading || propertiesLoading) {
     return (
       <div className="p-6 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Chargement des locataires...</p>
+        </div>
       </div>
     );
   }
-
   return (
     <div className="p-6 space-y-6">
-      {/* En-tête */}
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Locataires</h1>
-          <p className="text-gray-600">Gérez vos locataires et leurs contrats</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Locataires</h1>
+          <p className="text-gray-600">Gérez vos locataires et leurs baux</p>
         </div>
         <button
-          onClick={() => {
-            setSelectedTenant(null);
-            setShowForm(true);
-          }}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          onClick={handleAddTenant}
+          disabled={loading || properties.length === 0}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
         >
-          <Plus className="w-4 h-4 mr-2" />
-          Nouveau locataire
+          <Plus className="h-5 w-5" />
+          <span>Ajouter un locataire</span>
         </button>
       </div>
 
-      {/* Filtres et recherche */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Rechercher un locataire..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">Tous les statuts</option>
-              <option value="active">Actif</option>
-              <option value="pending">En attente</option>
-              <option value="terminated">Terminé</option>
-              <option value="inactive">Inactif</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Liste des locataires */}
-      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-        {filteredTenants.length === 0 ? (
-          <div className="p-8 text-center">
-            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun locataire trouvé</h3>
-            <p className="text-gray-600">
-              {searchTerm || statusFilter !== 'all' 
-                ? 'Aucun locataire ne correspond à vos critères de recherche.'
-                : 'Commencez par ajouter votre premier locataire.'
-              }
+      {/* No Properties Warning */}
+      {properties.length === 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center space-x-3">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+          <div>
+            <p className="text-yellow-800 font-medium">Aucun bien disponible</p>
+            <p className="text-yellow-700 text-sm">
+              Vous devez d'abord créer des biens immobiliers avant d'ajouter des locataires.
             </p>
           </div>
-        ) : (
-          <div className="divide-y">
-            {filteredTenants.map((tenant) => (
-              <div key={tenant.id} className="p-6 hover:bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Users className="w-6 h-6 text-blue-600" />
+        </div>
+      )}
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
+          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+          <div>
+            <p className="text-red-800 font-medium">Erreur</p>
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Stats Cards */}
+      {!loading && !propertiesLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Locataires actifs</p>
+              <p className="text-3xl font-bold text-green-600">{activeTenants}</p>
+            </div>
+            <Users className="h-8 w-8 text-green-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">En préavis</p>
+              <p className="text-3xl font-bold text-yellow-600">{noticeTenants}</p>
+            </div>
+            <Clock className="h-8 w-8 text-yellow-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Revenus totaux</p>
+              <p className="text-3xl font-bold text-blue-600">{totalRent.toLocaleString()}€</p>
+            </div>
+            <DollarSign className="h-8 w-8 text-blue-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Fins de bail</p>
+              <p className="text-3xl font-bold text-orange-600">{upcomingLeaseEnds.length}</p>
+              <p className="text-xs text-gray-500">Dans 3 mois</p>
+            </div>
+            <Calendar className="h-8 w-8 text-orange-600" />
+          </div>
+        </div>
+        </div>
+      )}
+
+      {/* Alerts */}
+      {upcomingLeaseEnds.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <AlertTriangle className="h-5 w-5 text-orange-600" />
+            <div>
+              <h3 className="font-medium text-orange-900">Fins de bail à venir</h3>
+              <p className="text-orange-700 text-sm">
+                {upcomingLeaseEnds.length} bail(s) se termine(nt) dans les 3 prochains mois
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      {!loading && !propertiesLoading && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher un locataire..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="active">Actifs</option>
+              <option value="notice">En préavis</option>
+              <option value="former">Anciens</option>
+            </select>
+            <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+              <Filter className="h-5 w-5 text-gray-600" />
+            </button>
+          </div>
+        </div>
+        </div>
+      )}
+
+      {/* Tenants List */}
+      {!loading && !propertiesLoading && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Locataire</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Bien</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Statut</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Bail</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Loyer</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Contact</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredTenants.map((tenant) => {
+                const propertyDetails = getPropertyDetails(tenant.propertyId);
+                return (
+                <tr key={tenant.id} className="hover:bg-gray-50">
+                  <td className="py-4 px-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Users className="h-5 w-5 text-blue-600" />
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3">
-                          <h3 className="text-lg font-medium text-gray-900">
-                            {tenant.first_name} {tenant.last_name}
-                          </h3>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(tenant.status)}`}>
-                            {getStatusLabel(tenant.status)}
-                          </span>
-                        </div>
-                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600">
-                          <div className="flex items-center">
-                            <Mail className="w-4 h-4 mr-2" />
-                            {tenant.email}
-                          </div>
-                          {tenant.phone && (
-                            <div className="flex items-center">
-                              <Phone className="w-4 h-4 mr-2" />
-                              {tenant.phone}
-                            </div>
-                          )}
-                          {tenant.property_name && (
-                            <div className="flex items-center">
-                              <MapPin className="w-4 h-4 mr-2" />
-                              {tenant.property_name}
-                            </div>
-                          )}
-                          {tenant.lease_start && (
-                            <div className="flex items-center">
-                              <Calendar className="w-4 h-4 mr-2" />
-                              Bail: {new Date(tenant.lease_start).toLocaleDateString()} - {tenant.lease_end && new Date(tenant.lease_end).toLocaleDateString()}
-                            </div>
-                          )}
-                          <div className="flex items-center font-medium">
-                            Loyer: {tenant.rent}€/mois
-                          </div>
-                        </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {tenant.firstName} {tenant.lastName}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Depuis le {new Date(tenant.leaseStart).toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleEditTenant(tenant)}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteTenant(tenant.id)}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    {propertyDetails ? (
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <MapPin className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium text-gray-900">
+                            {propertyDetails.name}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                          {propertyDetails.address}
+                        </p>
+                        <div className="flex items-center space-x-2 mt-1 ml-6">
+                          <span className="text-xs text-gray-500">
+                            {propertyDetails.surface}m² • {propertyDetails.rooms} pièces
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="h-4 w-4 text-red-400" />
+                        <span className="text-sm text-red-600">
+                          Bien introuvable
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tenant.status)}`}>
+                      {getStatusLabel(tenant.status)}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="text-sm">
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <span className="text-gray-900">
+                          {new Date(tenant.leaseEnd).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {Math.ceil((new Date(tenant.leaseEnd).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} jours restants
+                      </p>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="text-sm">
+                      <div className="font-medium text-gray-900">{tenant.rent}€</div>
+                      <div className="text-xs text-gray-500">
+                        Dépôt: {tenant.deposit}€
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => window.open(`mailto:${tenant.email}`)}
+                        className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                        title="Envoyer un email"
+                      >
+                        <Mail className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => window.open(`tel:${tenant.phone}`)}
+                        className="p-1 text-gray-600 hover:text-green-600 transition-colors"
+                        title="Appeler"
+                      >
+                        <Phone className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleViewTenant(tenant)}
+                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Voir les détails"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleEditTenant(tenant)}
+                        className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Modifier"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTenant(tenant.id)}
+                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        </div>
+      )}
 
-      {/* Modal de formulaire */}
-      {showForm && (
-        <TenantForm
+      {filteredTenants.length === 0 && (
+        <div className="text-center py-12">
+          <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun locataire trouvé</h3>
+          <p className="text-gray-600 mb-4">
+            {searchTerm || filterStatus !== 'all'
+              ? 'Aucun locataire ne correspond à vos critères de recherche.'
+              : 'Commencez par ajouter votre premier locataire.'
+            }
+          </p>
+          <button 
+            onClick={handleAddTenant}
+            disabled={properties.length === 0}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Ajouter un locataire
+          </button>
+        </div>
+      )}
+
+      {/* Tenant Form Modal */}
+      <TenantForm
+        tenant={editingTenant}
+        properties={properties}
+        onSave={handleSaveTenant}
+        onCancel={() => {
+          setShowTenantForm(false);
+          setEditingTenant(null);
+        }}
+        isOpen={showTenantForm}
+      />
+
+      {/* Tenant Details Modal */}
+      {selectedTenant && (
+        <TenantDetails
           tenant={selectedTenant}
+          property={getPropertyDetails(selectedTenant.propertyId)}
+          onEdit={() => {
+            setShowTenantDetails(false);
+            handleEditTenant(selectedTenant);
+          }}
+          onDelete={() => {
+            setShowTenantDetails(false);
+            handleDeleteTenant(selectedTenant.id);
+          }}
           onClose={() => {
-            setShowForm(false);
+            setShowTenantDetails(false);
             setSelectedTenant(null);
           }}
-          onSave={() => {
-            setShowForm(false);
-            setSelectedTenant(null);
-            loadTenants();
-          }}
+          isOpen={showTenantDetails}
         />
       )}
     </div>

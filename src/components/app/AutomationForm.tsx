@@ -15,7 +15,7 @@ import {
   Info
 } from 'lucide-react';
 import { Automation } from '../../types';
-import { useProperties } from '../../hooks/data';
+import { useProperties } from '../../hooks/useProperties';
 import { emailTemplateService } from '../../lib/emailTemplateService';
 import { useEffect } from 'react';
 import { documentStorage } from '../../lib/documentStorage';

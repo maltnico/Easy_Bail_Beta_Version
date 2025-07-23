@@ -1,117 +1,180 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, DollarSign, Calendar, Tag, FileText, Building, Users, CreditCard, Repeat, AlertCircle } from 'lucide-react';
+import { 
+  X, 
+  Save, 
+  DollarSign, 
+  Calendar, 
+  Tag,
+  FileText,
+  Repeat,
+  CreditCard,
+  Building,
+  Users,
+  Plus,
+  Trash2
+} from 'lucide-react';
 import { FinancialFlow, FinancialCategory } from '../../types/financial';
-import { useProperties, useTenants } from '../../hooks/data';
+import { useProperties } from '../../hooks/useProperties';
+import { useTenants } from '../../hooks/useTenants';
 
 interface FinancialFlowFormProps {
-  flow: FinancialFlow | null;
+  flow?: FinancialFlow | null;
   categories: FinancialCategory[];
-  onSave: (flowData: Omit<FinancialFlow, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  onSave: (flow: Omit<FinancialFlow, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onCancel: () => void;
   isOpen: boolean;
 }
 
-const FinancialFlowForm: React.FC<FinancialFlowFormProps> = ({
-  flow,
+const FinancialFlowForm: React.FC<FinancialFlowFormProps> = ({ 
+  flow, 
   categories,
-  onSave,
-  onCancel,
-  isOpen
+  onSave, 
+  onCancel, 
+  isOpen 
 }) => {
   const { properties } = useProperties();
   const { tenants } = useTenants();
-
-  const [formData, setFormData] = useState({
-    type: 'income' as 'income' | 'expense',
-    category: '',
-    amount: '',
-    description: '',
-    date: new Date().toISOString().split('T')[0],
-    propertyId: '',
-    tenantId: '',
-    status: 'pending' as 'pending' | 'completed' | 'cancelled',
-    paymentMethod: 'bank_transfer' as 'bank_transfer' | 'cash' | 'check' | 'direct_debit',
-    reference: '',
-    notes: '',
-    recurring: false,
-    recurrenceFrequency: 'monthly' as 'monthly' | 'quarterly' | 'yearly',
-    recurrenceEndDate: '',
-    tags: [] as string[]
+  
+  const [formData, setFormData] = useState<Omit<FinancialFlow, 'id' | 'createdAt' | 'updatedAt'>>({
+    type: flow?.type || 'income',
+    category: flow?.category || '',
+    amount: flow?.amount || 0,
+    description: flow?.description || '',
+    date: flow?.date || new Date(),
+    propertyId: flow?.propertyId || '',
+    propertyName: flow?.propertyName || '',
+    tenantId: flow?.tenantId || '',
+    tenantName: flow?.tenantName || '',
+    recurring: flow?.recurring || false,
+    recurrenceFrequency: flow?.recurrenceFrequency || 'monthly',
+    recurrenceEndDate: flow?.recurrenceEndDate,
+    status: flow?.status || 'completed',
+    paymentMethod: flow?.paymentMethod || 'bank_transfer',
+    reference: flow?.reference || '',
+    attachments: flow?.attachments || [],
+    tags: flow?.tags || [],
+    notes: flow?.notes || ''
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [newTag, setNewTag] = useState('');
 
+  // Filtrer les catégories par type
+  const filteredCategories = categories.filter(category => category.type === formData.type);
+
   useEffect(() => {
-    if (flow) {
-      setFormData({
-        type: flow.type,
-        category: flow.category,
-        amount: flow.amount.toString(),
-        description: flow.description,
-        date: flow.date.toISOString().split('T')[0],
-        propertyId: flow.propertyId || '',
-        tenantId: flow.tenantId || '',
-        status: flow.status,
-        paymentMethod: flow.paymentMethod || 'bank_transfer',
-        reference: flow.reference || '',
-        notes: flow.notes || '',
-        recurring: flow.recurring || false,
-        recurrenceFrequency: flow.recurrenceFrequency || 'monthly',
-        recurrenceEndDate: flow.recurrenceEndDate ? flow.recurrenceEndDate.toISOString().split('T')[0] : '',
-        tags: flow.tags || []
-      });
-    } else {
-      // Reset form for new flow
-      setFormData({
-        type: 'income',
-        category: '',
-        amount: '',
-        description: '',
-        date: new Date().toISOString().split('T')[0],
-        propertyId: '',
-        tenantId: '',
-        status: 'pending',
-        paymentMethod: 'bank_transfer',
-        reference: '',
-        notes: '',
-        recurring: false,
-        recurrenceFrequency: 'monthly',
-        recurrenceEndDate: '',
-        tags: []
-      });
+    // Si le type change, réinitialiser la catégorie
+    if (flow && flow.type !== formData.type) {
+      setFormData(prev => ({
+        ...prev,
+        category: ''
+      }));
     }
-    setErrors({});
-  }, [flow]);
+  }, [formData.type, flow]);
+
+  useEffect(() => {
+    // Mettre à jour le nom du bien lorsque l'ID change
+    if (formData.propertyId) {
+      const property = properties.find(p => p.id === formData.propertyId);
+      if (property) {
+        setFormData(prev => ({
+          ...prev,
+          propertyName: property.name
+        }));
+      }
+    }
+  }, [formData.propertyId, properties]);
+
+  useEffect(() => {
+    // Mettre à jour le nom du locataire lorsque l'ID change
+    if (formData.tenantId) {
+      const tenant = tenants.find(t => t.id === formData.tenantId);
+      if (tenant) {
+        setFormData(prev => ({
+          ...prev,
+          tenantName: `${tenant.firstName} ${tenant.lastName}`
+        }));
+      }
+    }
+  }, [formData.tenantId, tenants]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    
+    if (name === 'amount') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: parseFloat(value) || 0
+      }));
+    } else if (name === 'date') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: new Date(value)
+      }));
+    } else if (name === 'recurrenceEndDate') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value ? new Date(value) : undefined
+      }));
+    } else if (name === 'recurring') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: (e.target as HTMLInputElement).checked
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleAddTag = () => {
+    if (newTag.trim() && !formData.tags?.includes(newTag.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...(prev.tags || []), newTag.trim()]
+      }));
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags?.filter(t => t !== tag) || []
+    }));
+  };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-
+    
     if (!formData.description.trim()) {
       newErrors.description = 'La description est requise';
     }
-
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      newErrors.amount = 'Le montant doit être supérieur à 0';
-    }
-
+    
     if (!formData.category) {
       newErrors.category = 'La catégorie est requise';
     }
-
+    
+    if (formData.amount <= 0) {
+      newErrors.amount = 'Le montant doit être supérieur à 0';
+    }
+    
     if (!formData.date) {
       newErrors.date = 'La date est requise';
     }
-
-    if (formData.recurring && formData.recurrenceEndDate) {
-      const endDate = new Date(formData.recurrenceEndDate);
-      const startDate = new Date(formData.date);
-      if (endDate <= startDate) {
-        newErrors.recurrenceEndDate = 'La date de fin doit être postérieure à la date de début';
-      }
+    
+    if (formData.recurring && formData.recurrenceEndDate && formData.date > formData.recurrenceEndDate) {
+      newErrors.recurrenceEndDate = 'La date de fin doit être postérieure à la date de début';
     }
-
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -119,282 +182,247 @@ const FinancialFlowForm: React.FC<FinancialFlowFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
-      return;
-    }
-
-    setSaving(true);
+    if (!validateForm()) return;
+    
+    setLoading(true);
     try {
-      const flowData = {
-        userId: 'current-user-id', // This should come from auth context
-        type: formData.type,
-        category: formData.category,
-        amount: parseFloat(formData.amount),
-        description: formData.description,
-        date: new Date(formData.date),
-        propertyId: formData.propertyId || null,
-        tenantId: formData.tenantId || null,
-        status: formData.status,
-        paymentMethod: formData.paymentMethod,
-        reference: formData.reference,
-        notes: formData.notes,
-        recurring: formData.recurring,
-        recurrenceFrequency: formData.recurring ? formData.recurrenceFrequency : null,
-        recurrenceEndDate: formData.recurring && formData.recurrenceEndDate ? new Date(formData.recurrenceEndDate) : null,
-        tags: formData.tags
-      };
-
-      await onSave(flowData);
+      await onSave(formData);
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);
+      setErrors({ submit: 'Erreur lors de la sauvegarde' });
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
-
-  const handleAddTag = () => {
-    if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, newTag.trim()]
-      }));
-      setNewTag('');
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
-    }));
-  };
-
-  const filteredTenants = tenants.filter(tenant => 
-    !formData.propertyId || tenant.propertyId === formData.propertyId
-  );
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit}>
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">
-                  {flow ? 'Modifier le flux financier' : 'Nouveau flux financier'}
-                </h2>
-                <p className="text-sm text-gray-600">
-                  {flow ? 'Modifiez les informations du flux' : 'Ajoutez un nouveau flux de revenus ou de dépenses'}
-                </p>
-              </div>
-            </div>
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {flow ? 'Modifier le flux financier' : 'Ajouter un flux financier'}
+          </h2>
+          <button
+            onClick={onCancel}
+            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Type Selection */}
+          <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
-              onClick={onCancel}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              onClick={() => setFormData(prev => ({ ...prev, type: 'income' }))}
+              className={`flex items-center justify-center space-x-2 p-4 rounded-lg border-2 transition-colors ${
+                formData.type === 'income'
+                  ? 'border-green-600 bg-green-50 text-green-700'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
             >
-              <X className="h-6 w-6" />
+              <TrendingUp className={`h-5 w-5 ${formData.type === 'income' ? 'text-green-600' : 'text-gray-500'}`} />
+              <span className="font-medium">Revenu</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, type: 'expense' }))}
+              className={`flex items-center justify-center space-x-2 p-4 rounded-lg border-2 transition-colors ${
+                formData.type === 'expense'
+                  ? 'border-red-600 bg-red-50 text-red-700'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <TrendingDown className={`h-5 w-5 ${formData.type === 'expense' ? 'text-red-600' : 'text-gray-500'}`} />
+              <span className="font-medium">Dépense</span>
             </button>
           </div>
 
-          {/* Content */}
-          <div className="p-6 space-y-6">
-            {/* Type and Basic Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Type de flux *
-                </label>
-                <div className="flex space-x-4">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="type"
-                      value="income"
-                      checked={formData.type === 'income'}
-                      onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'income' | 'expense' }))}
-                      className="mr-2"
-                    />
-                    <span className="text-green-600">Revenu</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="type"
-                      value="expense"
-                      checked={formData.type === 'expense'}
-                      onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'income' | 'expense' }))}
-                      className="mr-2"
-                    />
-                    <span className="text-red-600">Dépense</span>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Montant * (€)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.amount ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="0.00"
-                />
-                {errors.amount && (
-                  <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Description and Category */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Basic Information */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Informations générales</h3>
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description *
                 </label>
                 <input
                   type="text"
+                  name="description"
                   value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={handleInputChange}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.description ? 'border-red-500' : 'border-gray-300'
+                    errors.description ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   }`}
-                  placeholder="Description du flux financier"
+                  placeholder="Ex: Loyer Janvier 2025 - Appartement Bastille"
                 />
                 {errors.description && (
                   <p className="mt-1 text-sm text-red-600">{errors.description}</p>
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Catégorie *
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.category ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                >
-                  <option value="">Sélectionner une catégorie</option>
-                  {categories
-                    .filter(cat => cat.type === formData.type)
-                    .map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Catégorie *
+                  </label>
+                  <select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      errors.category ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
+                  >
+                    <option value="">Sélectionner une catégorie</option>
+                    {filteredCategories.map(category => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
                     ))}
-                </select>
-                {errors.category && (
-                  <p className="mt-1 text-sm text-red-600">{errors.category}</p>
-                )}
+                  </select>
+                  {errors.category && (
+                    <p className="mt-1 text-sm text-red-600">{errors.category}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Montant (€) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-medium">€</span>
+                    <input
+                      type="number"
+                      name="amount"
+                      value={formData.amount}
+                      onChange={handleInputChange}
+                      min="0"
+                      step="0.01"
+                      className={`w-full pl-8 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors.amount ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  {errors.amount && (
+                    <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date *
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type="date"
+                      name="date"
+                      value={formData.date.toISOString().split('T')[0]}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors.date ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      }`}
+                    />
+                  </div>
+                  {errors.date && (
+                    <p className="mt-1 text-sm text-red-600">{errors.date}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Statut
+                  </label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="completed">Validé</option>
+                    <option value="pending">En attente</option>
+                    <option value="cancelled">Annulé</option>
+                  </select>
+                </div>
               </div>
             </div>
+          </div>
 
-            {/* Date and Status */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date *
-                </label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.date ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                />
-                {errors.date && (
-                  <p className="mt-1 text-sm text-red-600">{errors.date}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Statut
-                </label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="pending">En attente</option>
-                  <option value="completed">Validé</option>
-                  <option value="cancelled">Annulé</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Property and Tenant */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Associated Information */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Informations associées</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Bien immobilier
                 </label>
-                <select
-                  value={formData.propertyId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, propertyId: e.target.value, tenantId: '' }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Aucun bien sélectionné</option>
-                  {properties.map(property => (
-                    <option key={property.id} value={property.id}>
-                      {property.name} - {property.address}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <select
+                    name="propertyId"
+                    value={formData.propertyId}
+                    onChange={handleInputChange}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Sélectionner un bien</option>
+                    {properties.map(property => (
+                      <option key={property.id} value={property.id}>{property.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Locataire
                 </label>
-                <select
-                  value={formData.tenantId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, tenantId: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={!formData.propertyId}
-                >
-                  <option value="">Aucun locataire sélectionné</option>
-                  {filteredTenants.map(tenant => (
-                    <option key={tenant.id} value={tenant.id}>
-                      {tenant.firstName} {tenant.lastName}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <select
+                    name="tenantId"
+                    value={formData.tenantId}
+                    onChange={handleInputChange}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Sélectionner un locataire</option>
+                    {tenants.map(tenant => (
+                      <option key={tenant.id} value={tenant.id}>{tenant.firstName} {tenant.lastName}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
+          </div>
 
-            {/* Payment Method and Reference */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Payment Details */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Détails du paiement</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Méthode de paiement
                 </label>
-                <select
-                  value={formData.paymentMethod}
-                  onChange={(e) => setFormData(prev => ({ ...prev, paymentMethod: e.target.value as any }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="bank_transfer">Virement bancaire</option>
-                  <option value="cash">Espèces</option>
-                  <option value="check">Chèque</option>
-                  <option value="direct_debit">Prélèvement automatique</option>
-                </select>
+                <div className="relative">
+                  <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <select
+                    name="paymentMethod"
+                    value={formData.paymentMethod}
+                    onChange={handleInputChange}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="bank_transfer">Virement bancaire</option>
+                    <option value="cash">Espèces</option>
+                    <option value="check">Chèque</option>
+                    <option value="direct_debit">Prélèvement</option>
+                    <option value="other">Autre</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -403,147 +431,169 @@ const FinancialFlowForm: React.FC<FinancialFlowFormProps> = ({
                 </label>
                 <input
                   type="text"
+                  name="reference"
                   value={formData.reference}
-                  onChange={(e) => setFormData(prev => ({ ...prev, reference: e.target.value }))}
+                  onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Numéro de référence ou de facture"
+                  placeholder="Ex: VIR-2025-01"
                 />
               </div>
             </div>
+          </div>
 
-            {/* Recurring Options */}
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="recurring"
-                  checked={formData.recurring}
-                  onChange={(e) => setFormData(prev => ({ ...prev, recurring: e.target.checked }))}
-                  className="mr-2"
-                />
-                <label htmlFor="recurring" className="text-sm font-medium text-gray-700">
-                  Flux récurrent
-                </label>
-              </div>
+          {/* Recurrence */}
+          <div>
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="recurring"
+                name="recurring"
+                checked={formData.recurring}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="recurring" className="ml-2 text-sm font-medium text-gray-700">
+                Transaction récurrente
+              </label>
+            </div>
 
-              {formData.recurring && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Fréquence
-                    </label>
+            {formData.recurring && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6 border-l-2 border-blue-200">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fréquence
+                  </label>
+                  <div className="relative">
+                    <Repeat className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <select
+                      name="recurrenceFrequency"
                       value={formData.recurrenceFrequency}
-                      onChange={(e) => setFormData(prev => ({ ...prev, recurrenceFrequency: e.target.value as any }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onChange={handleInputChange}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="monthly">Mensuel</option>
-                      <option value="quarterly">Trimestriel</option>
-                      <option value="yearly">Annuel</option>
+                      <option value="monthly">Mensuelle</option>
+                      <option value="quarterly">Trimestrielle</option>
+                      <option value="yearly">Annuelle</option>
                     </select>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date de fin (optionnel)
-                    </label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date de fin (optionnelle)
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
                       type="date"
-                      value={formData.recurrenceEndDate}
-                      onChange={(e) => setFormData(prev => ({ ...prev, recurrenceEndDate: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        errors.recurrenceEndDate ? 'border-red-500' : 'border-gray-300'
+                      name="recurrenceEndDate"
+                      value={formData.recurrenceEndDate ? formData.recurrenceEndDate.toISOString().split('T')[0] : ''}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors.recurrenceEndDate ? 'border-red-300 bg-red-50' : 'border-gray-300'
                       }`}
                     />
-                    {errors.recurrenceEndDate && (
-                      <p className="mt-1 text-sm text-red-600">{errors.recurrenceEndDate}</p>
-                    )}
                   </div>
+                  {errors.recurrenceEndDate && (
+                    <p className="mt-1 text-sm text-red-600">{errors.recurrenceEndDate}</p>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
 
+          {/* Additional Information */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Informations additionnelles</h3>
+            
+            {/* Notes */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notes
+              </label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <textarea
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Notes ou commentaires additionnels..."
+                />
+              </div>
+            </div>
+            
             {/* Tags */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Tags
               </label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {formData.tags.map((tag, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(tag)}
-                      className="ml-1 text-blue-600 hover:text-blue-800"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ajouter un tag"
-                />
+              <div className="flex items-center space-x-2 mb-2">
+                <div className="relative flex-1">
+                  <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ajouter un tag..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
+                    }}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={handleAddTag}
-                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <Tag className="h-4 w-4" />
+                  <Plus className="h-5 w-5" />
                 </button>
               </div>
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notes
-              </label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Notes additionnelles..."
-              />
+              
+              {formData.tags && formData.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.tags.map((tag, index) => (
+                    <div key={index} className="flex items-center space-x-1 bg-gray-100 px-2 py-1 rounded-full">
+                      <span className="text-sm text-gray-800">{tag}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        className="text-gray-500 hover:text-red-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+          {/* Form Actions */}
+          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
-              disabled={saving}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
+              disabled={loading}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
             >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                  <span>Sauvegarde...</span>
-                </>
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  <span>{flow ? 'Modifier' : 'Créer'}</span>
-                </>
+                <Save className="h-5 w-5" />
               )}
+              <span>{flow ? 'Mettre à jour' : 'Enregistrer'}</span>
             </button>
           </div>
         </form>
@@ -551,5 +601,20 @@ const FinancialFlowForm: React.FC<FinancialFlowFormProps> = ({
     </div>
   );
 };
+
+// Composants pour les icônes de tendance
+const TrendingUp = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+    <polyline points="17 6 23 6 23 12"></polyline>
+  </svg>
+);
+
+const TrendingDown = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
+    <polyline points="17 18 23 18 23 12"></polyline>
+  </svg>
+);
 
 export default FinancialFlowForm;

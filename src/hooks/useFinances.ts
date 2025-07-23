@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useProperties } from './data/useProperties';
 import { 
   FinancialFlow, 
   FinancialCategory, 
