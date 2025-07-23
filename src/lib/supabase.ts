@@ -359,7 +359,34 @@ export const auth = {
           .limit(1);
         
         if (error) throw error;
-        return { data: data ? data[0] : null, error: null };
+        
+        const profile = data ? data[0] : null;
+        
+        // Promouvoir automatiquement admin@easybail.pro en super user
+        if (profile && profile.email === 'admin@easybail.pro' && profile.role !== 'admin') {
+          try {
+            const { data: updatedProfile, error: updateError } = await supabase
+              .from('profiles')
+              .update({ 
+                role: 'admin',
+                plan: 'expert',
+                subscription_status: 'active',
+                company_name: 'EasyBail SAS (Admin)',
+                phone: '04 66 89 68 30'
+              })
+              .eq('id', userId)
+              .select()
+              .single();
+            
+            if (!updateError && updatedProfile) {
+              return { data: updatedProfile, error: null };
+            }
+          } catch (updateError) {
+            console.warn('Could not update admin profile:', updateError);
+          }
+        }
+        
+        return { data: profile, error: null };
       }
       
       throw new Error('Utilisateur non trouvé');

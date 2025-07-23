@@ -81,17 +81,22 @@ export const useAuth = (): UseAuthReturn => {
         return;
       }
       
-      // Vérifier si l'utilisateur est admin et mettre à jour le rôle
-      if (data && data.email === 'admin@easybail.pro' && data.role !== 'admin') {
+      // Promouvoir automatiquement admin@easybail.pro en super user
+      if (data && data.email === 'admin@easybail.pro') {
         try {
           await auth.updateProfile(userId, { 
             role: 'admin',
             plan: 'expert',
-            subscription_status: 'active'
+            subscription_status: 'active',
+            // Marquer comme super user avec des privilèges étendus
+            company_name: 'EasyBail SAS (Admin)',
+            phone: '04 66 89 68 30'
           });
           data.role = 'admin';
           data.plan = 'expert';
           data.subscription_status = 'active';
+          data.company_name = 'EasyBail SAS (Admin)';
+          data.phone = '04 66 89 68 30';
         } catch (updateError) {
           console.warn('Could not update admin role:', updateError);
         }

@@ -31,18 +31,18 @@ import { supabase } from '../../lib/supabase';
 
 // Fonction pour vérifier si l'utilisateur est admin
 const isUserAdmin = (user: any): boolean => {
-  // Vérifier l'email admin
+  // Super user: admin@easybail.pro a TOUS les privilèges
   if (user?.email === 'admin@easybail.pro' || user?.user_metadata?.email === 'admin@easybail.pro') {
     return true;
   }
   
-  // Vérifier le rôle dans les métadonnées utilisateur
-  if (user?.user_metadata?.role === 'admin') {
+  // Vérifier le rôle admin dans les métadonnées utilisateur
+  if (user?.user_metadata?.role === 'admin' || user?.user_metadata?.role === 'super_admin') {
     return true;
   }
   
-  // Vérifier le rôle dans le profil
-  if (user?.role === 'admin' || user?.user_metadata?.role === 'admin') {
+  // Vérifier le rôle admin dans le profil
+  if (user?.role === 'admin' || user?.role === 'super_admin') {
     return true;
   }
   

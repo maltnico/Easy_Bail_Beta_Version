@@ -465,10 +465,10 @@ const AdminUsers: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    // Empêcher la suppression de l'admin principal
+    // Empêcher la suppression du super user principal
     const userToDelete = users.find(u => u.id === userId);
     if (userToDelete?.email === 'admin@easybail.pro') {
-      alert('Impossible de supprimer l\'administrateur principal');
+      alert('Impossible de supprimer le super utilisateur principal (admin@easybail.pro)');
       return;
     }
     
@@ -525,10 +525,10 @@ const AdminUsers: React.FC = () => {
     try {
       setLoading(true);
       
-      // Empêcher de modifier le rôle de l'admin principal
+      // Empêcher de modifier le rôle du super user principal
       const userToUpdate = users.find(u => u.id === userId);
       if (userToUpdate?.email === 'admin@easybail.pro' && role !== 'admin') {
-        alert('Impossible de modifier le rôle de l\'administrateur principal');
+        alert('Impossible de modifier le rôle du super utilisateur principal (admin@easybail.pro)');
         return;
       }
       
