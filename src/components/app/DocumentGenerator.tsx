@@ -23,13 +23,16 @@ import { documentGenerator } from '../../lib/documentGenerator';
 import { documentStorage } from '../../lib/documentStorage';
 import { useProperties } from '../../hooks/useProperties';
 import { useTenants } from '../../hooks/useTenants';
+import { useAuth } from '../../hooks/useAuth';
 import DocumentForm from './DocumentForm';
 import DocumentViewer from './DocumentViewer';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const DocumentGenerator = () => {
+  const { user } = useAuth();
   const { properties } = useProperties();
   const { tenants } = useTenants();
   
@@ -1159,7 +1162,7 @@ Votre propriétaire`);
         {showDocumentForm && selectedTemplate && (
           <DocumentForm
             template={selectedTemplate}
-            userId={'current-user'}
+            userId={user?.id || 'current-user'}
             properties={properties}
             tenants={tenants}
             onSave={handleDocumentSaved}
