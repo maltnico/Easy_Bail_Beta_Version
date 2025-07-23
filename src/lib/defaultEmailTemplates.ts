@@ -7,6 +7,7 @@ export const defaultEmailTemplates: Omit<EmailTemplate, 'id' | 'createdAt' | 'up
     name: "Quittance de loyer mensuelle",
     subject: "Quittance de loyer - {{month}}",
     category: "financial",
+    type: "email",
     documentTemplateId: "550e8400-e29b-41d4-a716-446655440003",
     content: `<!DOCTYPE html>
 <html>
@@ -162,6 +163,7 @@ export const defaultEmailTemplates: Omit<EmailTemplate, 'id' | 'createdAt' | 'up
     name: "Rappel de paiement",
     subject: "Rappel : Paiement du loyer {{month}}",
     category: "financial",
+    type: "email",
     documentTemplateId: undefined,
     content: `<!DOCTYPE html>
 <html>
@@ -272,6 +274,7 @@ export const defaultEmailTemplates: Omit<EmailTemplate, 'id' | 'createdAt' | 'up
     name: "Rappel d'assurance habitation",
     subject: "Rappel : Attestation d'assurance habitation",
     category: "administrative",
+    type: "email",
     documentTemplateId: undefined,
     content: `<!DOCTYPE html>
 <html>
@@ -372,6 +375,7 @@ export const defaultEmailTemplates: Omit<EmailTemplate, 'id' | 'createdAt' | 'up
     name: "Notification d'incident",
     subject: "Incident signalé - {{property_name}}",
     category: "property",
+    type: "email",
     documentTemplateId: undefined,
     content: `<!DOCTYPE html>
 <html>
@@ -485,6 +489,7 @@ export const defaultEmailTemplates: Omit<EmailTemplate, 'id' | 'createdAt' | 'up
     name: "Révision annuelle du loyer",
     subject: "Information : Révision annuelle de votre loyer",
     category: "financial",
+    type: "email",
     documentTemplateId: undefined,
     content: `<!DOCTYPE html>
 <html>
@@ -635,6 +640,7 @@ export const defaultEmailTemplates: Omit<EmailTemplate, 'id' | 'createdAt' | 'up
     name: "Fin de bail - Informations",
     subject: "Informations concernant la fin de votre bail",
     category: "tenant",
+    type: "email",
     documentTemplateId: undefined,
     content: `<!DOCTYPE html>
 <html>

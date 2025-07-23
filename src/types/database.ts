@@ -10,6 +10,7 @@ export interface DatabaseProperty {
   surface: number;
   rooms: number;
   owner_id: string;
+  amenities?: string[];
   created_at: string;
   updated_at: string;
 }

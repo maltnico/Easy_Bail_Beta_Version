@@ -10,6 +10,7 @@ export interface EmailTemplate {
   subject: string;
   content: string;
   category: 'tenant' | 'property' | 'financial' | 'administrative' | 'other';
+  type: string;
   documentTemplateId?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -180,7 +181,8 @@ class EmailTemplateService {
             name: template.name,
             subject: template.subject,
             content: template.content,
-            category: template.category
+            category: template.category,
+            type: template.type
           })
           .select()
           .single();
@@ -194,6 +196,7 @@ class EmailTemplateService {
           subject: data.subject,
           content: data.content,
           category: data.category as any,
+          type: data.type,
           createdAt: new Date(data.created_at),
           updatedAt: new Date(data.updated_at)
         };
@@ -208,6 +211,7 @@ class EmailTemplateService {
             subject: template.subject,
             content: template.content,
             category: template.category,
+            type: template.type,
             updated_at: now.toISOString()
           })
           .eq('id', template.id);
@@ -330,6 +334,7 @@ class EmailTemplateService {
         subject: data.subject,
         content: data.content,
         category: data.category as any,
+        type: data.type,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at)
       };
