@@ -86,6 +86,7 @@ const convertPropertyFromDB = (property: PropertyRow, tenant?: TenantRow): Prope
     charges: Number(property.charges || 0),
     surface: Number(property.surface),
     rooms: property.rooms,
+    amenities: property.amenities || [],
     tenant: tenant ? {
       id: tenant.id,
       firstName: tenant.first_name,
@@ -235,7 +236,7 @@ export const propertiesApi = {
         surface: propertyData.surface,
         rooms: propertyData.rooms || 1,
         description: propertyData.description || null,
-        amenities: propertyData.amenities || null,
+        amenities: propertyData.amenities || [],
         images: propertyData.images || null
       };
       
@@ -298,7 +299,7 @@ export const propertiesApi = {
       if (propertyData.surface !== undefined) propertyUpdate.surface = propertyData.surface;
       if (propertyData.rooms !== undefined) propertyUpdate.rooms = propertyData.rooms;
       if (propertyData.description !== undefined) propertyUpdate.description = propertyData.description;
-      if (propertyData.amenities !== undefined) propertyUpdate.amenities = propertyData.amenities;
+      if (propertyData.amenities !== undefined) propertyUpdate.amenities = propertyData.amenities || [];
       if (propertyData.images !== undefined) propertyUpdate.images = propertyData.images;
       
       const { data, error } = await supabase
