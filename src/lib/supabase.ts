@@ -19,77 +19,178 @@ export type AuthUser = {
   updated_at: string;
 };
 
-// Créer le client Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Configuration et état de la connexion
+class SupabaseConnection {
+  private client: any = null;
+  private isConfigured = false;
+  private isConnected = false;
+  private connectionAttempts = 0;
+  private maxRetries = 3;
+  private retryDelay = 2000;
+  private lastConnectionCheck = 0;
+  private connectionCheckInterval = 30000; // 30 secondes
 
-// Check if environment variables are properly set
-const isSupabaseConfigured = supabaseUrl && supabaseAnonKey && 
-                            !supabaseUrl.includes('your-project-id') && 
-                            !supabaseAnonKey.includes('your-anon-key');
+  constructor() {
+    this.initialize();
+  }
 
-// Add connection timeout check
-let isSupabaseConnected = isSupabaseConfigured;
+  private initialize() {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!isSupabaseConnected) {
-  console.warn('Les variables d\'environnement Supabase ne sont pas correctement définies. Certaines fonctionnalités seront limitées.');
-}
+    // Validation des variables d'environnement
+    this.isConfigured = this.validateConfig(supabaseUrl, supabaseAnonKey);
 
-export const supabase = createClient<Database>(
-  supabaseUrl || '',
-  supabaseAnonKey || '',
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-    global: {
-      fetch: (...args) => {
-        // Add timeout to fetch requests
-        const [resource, config] = args;
-        return fetch(resource, {
-          ...config,
-          signal: AbortSignal.timeout(30000), // 30 second timeout
-        }).catch(error => {
-          // Handle network-related errors including 'Failed to fetch'
-          if (error.name === 'TimeoutError' || 
-              error.name === 'AbortError' || 
-              error.message === 'Failed to fetch' ||
-              error.message.includes('fetch') ||
-              error instanceof TypeError) {
-            isSupabaseConnected = false;
-            // Return a controlled error instead of letting the original TypeError propagate
-            // Silently handle network errors to prevent console spam
-            return Promise.reject(error);
-          }
-          throw error;
+    if (this.isConfigured) {
+      this.createClient(supabaseUrl, supabaseAnonKey);
+    } else {
+      console.warn('Configuration Supabase invalide - Mode démo activé');
+    }
+  }
+
+  private validateConfig(url: string, key: string): boolean {
+    if (!url || !key) {
+      console.warn('Variables d\'environnement Supabase manquantes');
+      return false;
+    }
+
+    if (url.includes('your-project-id') || key.includes('your-anon-key')) {
+      console.warn('Variables d\'environnement Supabase contiennent des valeurs par défaut');
+      return false;
+    }
+
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      console.warn('URL Supabase invalide');
+      return false;
+    }
+  }
+
+  private createClient(url: string, key: string) {
+    this.client = createClient<Database>(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+      global: {
+        fetch: this.createFetchWrapper(),
+      },
+    });
+  }
+
+  private createFetchWrapper() {
+    return async (url: string, options: any = {}) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
+        
+        // Marquer comme connecté si la requête réussit
+        if (response.ok) {
+          this.isConnected = true;
+          this.connectionAttempts = 0;
+        }
+
+        return response;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        this.handleConnectionError(error);
+        throw error;
+      }
+    };
+  }
+
+  private handleConnectionError(error: any) {
+    const isNetworkError = 
+      error.name === 'AbortError' ||
+      error.name === 'TimeoutError' ||
+      error.message?.includes('Failed to fetch') ||
+      error.message?.includes('NetworkError') ||
+      error.message?.includes('timeout');
+
+    if (isNetworkError) {
+      this.isConnected = false;
+      this.connectionAttempts++;
+      
+      if (this.connectionAttempts <= this.maxRetries) {
+        console.warn(`Tentative de reconnexion ${this.connectionAttempts}/${this.maxRetries}`);
+        setTimeout(() => this.attemptReconnection(), this.retryDelay * this.connectionAttempts);
+      } else {
+        console.warn('Nombre maximum de tentatives de reconnexion atteint');
       }
     }
   }
-);
 
-// Function to check if Supabase is connected
-export const checkSupabaseConnection = async (): Promise<boolean> => {
-  if (!isSupabaseConfigured) return false;
-  
-  try {
-    const { error } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
-    isSupabaseConnected = !error;
-    return isSupabaseConnected;
-  } catch (error) {
-    console.warn('Supabase connection check failed:', error);
-    isSupabaseConnected = false;
-    return false;
+  private async attemptReconnection() {
+    try {
+      const connected = await this.checkConnection();
+      if (connected) {
+        console.log('Reconnexion Supabase réussie');
+        this.isConnected = true;
+        this.connectionAttempts = 0;
+      }
+    } catch (error) {
+      console.warn('Échec de la reconnexion:', error);
+    }
   }
-};
 
-// Export connection status
-export const isConnected = () => isSupabaseConnected;
+  async checkConnection(): Promise<boolean> {
+    if (!this.isConfigured || !this.client) return false;
 
-// Fonctions utilitaires pour l'authentification
+    const now = Date.now();
+    if (now - this.lastConnectionCheck < this.connectionCheckInterval) {
+      return this.isConnected;
+    }
+
+    try {
+      const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
+      this.isConnected = !error;
+      this.lastConnectionCheck = now;
+      return this.isConnected;
+    } catch (error) {
+      this.isConnected = false;
+      this.lastConnectionCheck = now;
+      return false;
+    }
+  }
+
+  getClient() {
+    return this.client;
+  }
+
+  isReady(): boolean {
+    return this.isConfigured && this.isConnected;
+  }
+
+  getConnectionStatus() {
+    return {
+      configured: this.isConfigured,
+      connected: this.isConnected,
+      attempts: this.connectionAttempts,
+    };
+  }
+}
+
+// Instance singleton de la connexion
+const supabaseConnection = new SupabaseConnection();
+export const supabase = supabaseConnection.getClient();
+
+// Fonctions utilitaires
+export const checkSupabaseConnection = () => supabaseConnection.checkConnection();
+export const isConnected = () => supabaseConnection.isReady();
+export const getConnectionStatus = () => supabaseConnection.getConnectionStatus();
+
+// Service d'authentification amélioré
 export const auth = {
-  // Inscription
+  // Inscription avec gestion d'erreur améliorée
   async signUp(email: string, password: string, userData: {
     firstName: string;
     lastName: string;
@@ -97,33 +198,10 @@ export const auth = {
     phone?: string;
   }) {
     try {
-      // Check if Supabase is properly configured
-      if (!isSupabaseConfigured) {
-        console.warn('Supabase not configured. Using mock authentication.');
-        // Return mock data for development
-        return { 
-          data: { 
-            user: { 
-              id: 'mock-user-id',
-              email,
-              user_metadata: {
-                first_name: userData.firstName,
-                last_name: userData.lastName,
-                company_name: userData.companyName,
-                phone: userData.phone
-              }
-            }, 
-            session: { 
-              access_token: 'mock-token',
-              refresh_token: 'mock-refresh-token',
-              expires_at: Date.now() + 3600000
-            } 
-          }, 
-          error: null 
-        };
+      if (!supabaseConnection.isReady()) {
+        return this.handleOfflineAuth('signup', email, userData);
       }
-      
-      // Create the user with Supabase
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -134,298 +212,120 @@ export const auth = {
             company_name: userData.companyName,
             phone: userData.phone
           },
-          // No email redirect needed for simple registration
         }
       });
-      
-      if (error) throw error;
-      
-      return { data, error: null };
-    } catch (error) {
-      const errorMessage = (error as Error).message;
-      console.warn('Sign up error:', error);
-      
-      // Check if it's a network-related error
-      if (errorMessage.includes('Failed to fetch') || 
-          errorMessage.includes('TimeoutError') || 
-          errorMessage.includes('signal timed out') ||
-          errorMessage.includes('NetworkError') ||
-          errorMessage.includes('timeout')) {
-        console.warn('Network error detected. Switching to demo mode for sign up.');
-        isSupabaseConnected = false;
-        
-        // Return mock successful signup data
-        return { 
-          data: { 
-            user: { 
-              id: 'demo-user-id',
-              email,
-              user_metadata: {
-                first_name: userData.firstName,
-                last_name: userData.lastName,
-                company_name: userData.companyName,
-                phone: userData.phone
-              }
-            }, 
-            session: { 
-              access_token: 'demo-token',
-              refresh_token: 'demo-refresh-token',
-              expires_at: Date.now() + 3600000
-            } 
-          }, 
-          error: null 
-        };
-      }
-      
-      // For other errors, return the actual error but don't mark as disconnected
-      // since this could be a validation error or other non-connection issue
-      return { 
-        data: { user: null, session: null }, 
-        error: { message: errorMessage } 
-      };
-    }
 
-    // Log successful signup activity
-    if (data?.user) {
+      if (error) throw error;
+
+      // Log de l'activité si possible
       try {
         await activityService.addActivity({
           type: 'system',
           action: 'user_signup',
           title: 'Nouveau compte créé',
           description: `Compte créé pour ${userData.firstName} ${userData.lastName}`,
-          userId: data.user.id,
+          userId: data.user?.id || 'unknown',
           priority: 'medium',
           category: 'success'
         });
       } catch (activityError) {
-        console.warn('Could not log signup activity:', activityError);
+        console.warn('Impossible de logger l\'activité:', activityError);
       }
+
+      return { data, error: null };
+    } catch (error) {
+      return this.handleAuthError(error, 'signup', email, userData);
     }
   },
 
-  // Connexion
+  // Connexion avec gestion d'erreur améliorée
   async signIn(email: string, password: string) {
     try {
-      // Check if Supabase is properly configured
-      if (!isSupabaseConfigured) {
-        console.warn('Supabase not configured. Using mock authentication.');
-        // Return mock data for development
-        return { 
-          data: { 
-            user: { 
-              id: 'mock-user-id',
-              email,
-              user_metadata: {
-                first_name: 'User',
-                last_name: 'Demo'
-              }
-            }, 
-            session: { 
-              access_token: 'mock-token',
-              refresh_token: 'mock-refresh-token',
-              expires_at: Date.now() + 3600000
-            } 
-          }, 
-          error: null 
-        };
+      if (!supabaseConnection.isReady()) {
+        return this.handleOfflineAuth('signin', email);
       }
-      
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
-      
-      if (error) throw error;
-      
-      return { data, error: null };
-    } catch (error) {
-      const errorMessage = (error as Error).message;
-      console.warn('Sign in error:', error);
-      
-      // Check if it's a network-related error
-      if (errorMessage.includes('Failed to fetch') || 
-          errorMessage.includes('TimeoutError') || 
-          errorMessage.includes('signal timed out') ||
-          errorMessage.includes('NetworkError') ||
-          errorMessage.includes('timeout')) {
-        console.warn('Network error detected. Switching to demo mode for sign in.');
-        isSupabaseConnected = false;
-        
-        // Return mock successful signin data
-        return { 
-          data: { 
-            user: { 
-              id: 'demo-user-id',
-              email,
-              user_metadata: {
-                first_name: 'Demo',
-                last_name: 'User'
-              }
-            }, 
-            session: { 
-              access_token: 'demo-token',
-              refresh_token: 'demo-refresh-token',
-              expires_at: Date.now() + 3600000
-            } 
-          }, 
-          error: null 
-        };
-      }
-      
-      // For other errors (like invalid credentials), return the actual error
-      return { 
-        data: { user: null, session: null }, 
-        error: { message: errorMessage } 
-      };
-    }
 
-    // Log successful signin activity
-    if (data?.user) {
+      if (error) throw error;
+
+      // Log de l'activité si possible
       try {
         await activityService.addActivity({
           type: 'login',
           action: 'user_signin',
           title: 'Connexion utilisateur',
           description: `Connexion réussie pour ${email}`,
-          userId: data.user.id,
+          userId: data.user?.id || 'unknown',
           priority: 'low',
           category: 'info'
         });
       } catch (activityError) {
-        console.warn('Could not log signin activity:', activityError);
+        console.warn('Impossible de logger l\'activité:', activityError);
       }
+
+      return { data, error: null };
+    } catch (error) {
+      return this.handleAuthError(error, 'signin', email);
     }
   },
 
   // Déconnexion
   async signOut() {
     try {
-      // Check if Supabase is properly configured
-      if (!isSupabaseConfigured) {
-        console.warn('Supabase not configured. Using mock authentication.');
+      if (!supabaseConnection.isReady()) {
         return { error: null };
       }
-      
+
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      return { error: null };
+      return { error: error ? { message: error.message } : null };
     } catch (error) {
-      const errorMessage = (error as Error).message;
-      console.warn('Sign out error:', error);
-      
-      // For network errors, just return success since we're going offline anyway
-      if (errorMessage.includes('Failed to fetch') || 
-          errorMessage.includes('TimeoutError') || 
-          errorMessage.includes('signal timed out') ||
-          errorMessage.includes('NetworkError') ||
-          errorMessage.includes('timeout')) {
-        console.warn('Network error during sign out. Proceeding with local sign out.');
-        isSupabaseConnected = false;
-        return { error: null };
-      }
-      
-      return { error: { message: errorMessage } };
+      console.warn('Erreur lors de la déconnexion:', error);
+      return { error: null }; // Toujours permettre la déconnexion locale
     }
   },
 
   // Récupérer la session actuelle
   async getSession() {
     try {
-      // Check if Supabase is properly configured
-      if (!isSupabaseConfigured) {
-        console.warn('Supabase not configured. Using mock authentication.');
-        // Return mock data for development
-        return { 
-          data: { 
-            session: { 
-              user: {
-                id: 'mock-user-id',
-                email: 'user@example.com',
-                user_metadata: {
-                  first_name: 'User',
-                  last_name: 'Demo'
-                }
-              },
-              access_token: 'mock-token',
-              refresh_token: 'mock-refresh-token',
-              expires_at: Date.now() + 3600000
-            } 
-          }, 
-          error: null 
-        };
+      if (!supabaseConnection.isReady()) {
+        return this.getDemoSession();
       }
-      
+
       const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        // Gérer les erreurs de session invalide
+        if (error.message.includes('User from sub claim in JWT does not exist') ||
+            error.message.includes('Invalid Refresh Token')) {
+          await supabase.auth.signOut();
+          return { data: { session: null }, error: null };
+        }
+        throw error;
+      }
+
       return { data, error: null };
     } catch (error) {
-      const errorMessage = (error as Error).message;
-      console.warn('Get session error:', error);
-      
-      // Check if it's a network-related error
-      if (errorMessage.includes('Failed to fetch') || 
-          errorMessage.includes('TimeoutError') || 
-          errorMessage.includes('signal timed out') ||
-          errorMessage.includes('NetworkError') ||
-          errorMessage.includes('timeout')) {
-        console.warn('Network error detected. Returning demo session.');
-        isSupabaseConnected = false;
-        
-        // Return mock session data
-        return { 
-          data: { 
-            session: { 
-              user: {
-                id: 'demo-user-id',
-                email: 'demo@example.com',
-                user_metadata: {
-                  first_name: 'Demo',
-                  last_name: 'User'
-                }
-              },
-              access_token: 'demo-token',
-              refresh_token: 'demo-refresh-token',
-              expires_at: Date.now() + 3600000
-            } 
-          }, 
-          error: null 
-        };
-      }
-      
-      return { data: { session: null }, error: { message: errorMessage } };
+      console.warn('Erreur lors de la récupération de session:', error);
+      return this.getDemoSession();
     }
   },
 
   // Récupérer le profil utilisateur
   async getProfile(userId: string) {
     try {
-      // Check if Supabase is properly configured
-      if (!isSupabaseConfigured) {
-        console.warn('Supabase not configured. Using mock profile data.');
-        // Return mock data for development
-        return { 
-          data: {
-            id: userId,
-            email: 'user@example.com',
-            first_name: 'User',
-            last_name: 'Demo',
-            company_name: 'Demo Company',
-            phone: '0123456789',
-            plan: 'starter',
-            trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'trial',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }, 
-          error: null 
-        };
+      if (!supabaseConnection.isReady()) {
+        return this.getDemoProfile(userId);
       }
-      
+
       const { data: session, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) throw sessionError;
       
-      if (session && session.session?.user.id === userId) {
-        // Récupérer le profil complet depuis la table profiles
+      if (session?.session?.user.id === userId) {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
@@ -433,18 +333,24 @@ export const auth = {
           .single();
         
         if (error) throw error;
-        
         return { data, error: null };
       }
+      
       throw new Error('Utilisateur non trouvé');
     } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
+      console.warn('Erreur lors de la récupération du profil:', error);
+      return this.getDemoProfile(userId);
     }
   },
 
   // Mettre à jour le profil
   async updateProfile(userId: string, updates: Partial<AuthUser>) {
     try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - mise à jour du profil simulée');
+        return { data: { ...updates, id: userId }, error: null };
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .update(updates)
@@ -453,7 +359,6 @@ export const auth = {
         .single();
       
       if (error) throw error;
-      
       return { data, error: null };
     } catch (error) {
       return { data: null, error: { message: (error as Error).message } };
@@ -463,20 +368,143 @@ export const auth = {
   // Réinitialiser le mot de passe
   async resetPassword(email: string) {
     try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - réinitialisation simulée');
+        return { data: {}, error: null };
+      }
+
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
       return { data: {}, error: null };
     } catch (error) {
       return { data: null, error: { message: (error as Error).message } };
     }
+  },
+
+  // Gestion de l'authentification hors ligne
+  handleOfflineAuth(operation: string, email: string, userData?: any) {
+    console.warn(`Mode hors ligne activé pour ${operation}`);
+    
+    const mockUser = {
+      id: 'demo-user-id',
+      email,
+      user_metadata: userData ? {
+        first_name: userData.firstName,
+        last_name: userData.lastName,
+        company_name: userData.companyName,
+        phone: userData.phone
+      } : {
+        first_name: 'Demo',
+        last_name: 'User'
+      }
+    };
+
+    return {
+      data: {
+        user: mockUser,
+        session: {
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh-token',
+          expires_at: Date.now() + 3600000
+        }
+      },
+      error: null
+    };
+  },
+
+  // Gestion des erreurs d'authentification
+  handleAuthError(error: any, operation: string, email?: string, userData?: any) {
+    const errorMessage = (error as Error).message;
+    
+    // Erreurs réseau - basculer en mode démo
+    if (errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('AbortError')) {
+      console.warn(`Erreur réseau lors de ${operation} - Mode démo activé`);
+      return this.handleOfflineAuth(operation, email || 'demo@example.com', userData);
+    }
+
+    // Autres erreurs - retourner l'erreur réelle
+    return {
+      data: { user: null, session: null },
+      error: { message: this.translateError(errorMessage) }
+    };
+  },
+
+  // Session démo
+  getDemoSession() {
+    return {
+      data: {
+        session: {
+          user: {
+            id: 'demo-user-id',
+            email: 'demo@example.com',
+            user_metadata: {
+              first_name: 'Demo',
+              last_name: 'User'
+            }
+          },
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh-token',
+          expires_at: Date.now() + 3600000
+        }
+      },
+      error: null
+    };
+  },
+
+  // Profil démo
+  getDemoProfile(userId: string) {
+    return {
+      data: {
+        id: userId,
+        email: 'demo@example.com',
+        first_name: 'Demo',
+        last_name: 'User',
+        company_name: 'Demo Company',
+        phone: '0123456789',
+        plan: 'starter',
+        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        subscription_status: 'trial',
+        role: 'user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      error: null
+    };
+  },
+
+  // Traduction des erreurs
+  translateError(message: string): string {
+    const translations: Record<string, string> = {
+      'Invalid login credentials': 'Email ou mot de passe incorrect',
+      'Email not confirmed': 'Veuillez confirmer votre email avant de vous connecter',
+      'Too many requests': 'Trop de tentatives. Veuillez réessayer dans quelques minutes',
+      'User already registered': 'Un compte avec cette adresse email existe déjà',
+      'Password should be at least': 'Le mot de passe doit contenir au moins 6 caractères',
+      'Invalid email': 'Format d\'email invalide'
+    };
+
+    for (const [key, value] of Object.entries(translations)) {
+      if (message.includes(key)) {
+        return value;
+      }
+    }
+
+    return message;
   }
 };
 
 // Fonctions pour la gestion des abonnements
 export const subscription = {
-  // Mettre à jour le plan d'abonnement
   async updatePlan(userId: string, plan: 'starter' | 'professional' | 'expert') {
     try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - mise à jour du plan simulée');
+        return { data: { plan }, error: null };
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .update({ 
@@ -488,16 +516,19 @@ export const subscription = {
         .single();
       
       if (error) throw error;
-      
       return { data, error: null };
     } catch (error) {
       return { data: null, error: { message: (error as Error).message } };
     }
   },
 
-  // Prolonger la période d'essai
   async extendTrial(userId: string, days: number = 14) {
     try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - extension d\'essai simulée');
+        return { data: { trial_ends_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }, error: null };
+      }
+
       const newTrialEnd = new Date();
       newTrialEnd.setDate(newTrialEnd.getDate() + days);
       
@@ -511,16 +542,19 @@ export const subscription = {
         .single();
       
       if (error) throw error;
-      
       return { data, error: null };
     } catch (error) {
       return { data: null, error: { message: (error as Error).message } };
     }
   },
 
-  // Annuler l'abonnement
   async cancelSubscription(userId: string) {
     try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - annulation simulée');
+        return { data: { subscription_status: 'cancelled' }, error: null };
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .update({ 
@@ -531,10 +565,25 @@ export const subscription = {
         .single();
       
       if (error) throw error;
-      
       return { data, error: null };
     } catch (error) {
       return { data: null, error: { message: (error as Error).message } };
     }
   }
 };
+
+// Fonction pour surveiller l'état de la connexion
+export const startConnectionMonitoring = () => {
+  setInterval(async () => {
+    const status = getConnectionStatus();
+    if (!status.connected && status.configured) {
+      console.log('Vérification de la reconnexion Supabase...');
+      await checkSupabaseConnection();
+    }
+  }, 60000); // Vérifier toutes les minutes
+};
+
+// Démarrer la surveillance automatiquement
+if (typeof window !== 'undefined') {
+  startConnectionMonitoring();
+}
