@@ -41,7 +41,7 @@ const PropertyList: React.FC = () => {
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
   const filteredProperties = properties.filter(property =>
-    property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    property.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     property.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
