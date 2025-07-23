@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tenant } from '../types';
-import { tenantsApi } from '../lib/properties';
+import { tenantService } from '../services/database';
 import { activityService } from '../lib/activityService';
 import { isCacheValid, getCachedData, cacheData, invalidateCache } from '../utils/useLocalStorage';
 
@@ -38,17 +38,23 @@ export const useTenants = (): UseTenantsReturn => {
         setTenants(cachedData);
         
         // Charger les données fraîches en arrière-plan
-        tenantsApi.getTenants().then(freshData => {
-          setTenants(freshData);
-          cacheData(TENANTS_CACHE_KEY, freshData);
+        tenantService.findAll().then(response => {
+          if (response.success) {
+            setTenants(response.data);
+            cacheData(TENANTS_CACHE_KEY, response.data);
+          }
         }).catch(err => {
           console.warn('Erreur lors du rafraîchissement des locataires en arrière-plan:', err);
         });
       } else {
         // Pas de cache valide, charger depuis l'API
-        const data = await tenantsApi.getTenants();
-        setTenants(data);
-        cacheData(TENANTS_CACHE_KEY, data);
+        const response = await tenantService.findAll();
+        if (response.success) {
+          setTenants(response.data);
+          cacheData(TENANTS_CACHE_KEY, response.data);
+        } else {
+          throw new Error(response.error || 'Erreur lors du chargement des locataires');
+        }
       }
     } catch (err) {
       setError(handleSupabaseError(err));
@@ -66,23 +72,28 @@ export const useTenants = (): UseTenantsReturn => {
       invalidateCache(TENANTS_CACHE_KEY);
       invalidateCache('easybail_properties_cache'); // Invalider aussi le cache des biens
       
-      const newTenant = await tenantsApi.createTenant(tenantData);
-      setTenants(prev => [newTenant, ...prev]);
+      const response = await tenantService.create(tenantData);
+      if (response.success) {
+        const newTenant = response.data;
+        setTenants(prev => [newTenant, ...prev]);
+      } else {
+        throw new Error(response.error || 'Erreur lors de la création du locataire');
+      }
       
       // Ajouter une activité
       activityService.addActivity({
         type: 'tenant',
         action: 'added',
         title: 'Nouveau locataire',
-        description: `${newTenant.firstName} ${newTenant.lastName} a été ajouté`,
-        entityId: newTenant.id,
+        description: `${response.data.firstName} ${response.data.lastName} a été ajouté`,
+        entityId: response.data.id,
         entityType: 'tenant',
-        entityName: `${newTenant.firstName} ${newTenant.lastName}`,
+        entityName: `${response.data.firstName} ${response.data.lastName}`,
         userId: 'current-user',
         metadata: {
-          propertyId: newTenant.propertyId,
-          rent: newTenant.rent,
-          leaseStart: newTenant.leaseStart.toISOString()
+          propertyId: response.data.propertyId,
+          rent: response.data.rent,
+          leaseStart: response.data.leaseStart.toISOString()
         },
         priority: 'medium',
         category: 'success'
@@ -101,8 +112,12 @@ export const useTenants = (): UseTenantsReturn => {
       invalidateCache(TENANTS_CACHE_KEY);
       invalidateCache('easybail_properties_cache'); // Invalider aussi le cache des biens
       
-      const updatedTenant = await tenantsApi.updateTenant(id, tenantData);
-      setTenants(prev => prev.map(t => t.id === id ? updatedTenant : t));
+      const response = await tenantService.update(id, tenantData);
+      if (response.success) {
+        setTenants(prev => prev.map(t => t.id === id ? response.data : t));
+      } else {
+        throw new Error(response.error || 'Erreur lors de la mise à jour du locataire');
+      }
     } catch (err) {
       setError(handleSupabaseError(err));
       throw err;
@@ -117,7 +132,10 @@ export const useTenants = (): UseTenantsReturn => {
       invalidateCache(TENANTS_CACHE_KEY);
       invalidateCache('easybail_properties_cache'); // Invalider aussi le cache des biens
       
-      await tenantsApi.deleteTenant(id);
+      const response = await tenantService.delete(id);
+      if (!response.success) {
+        throw new Error(response.error || 'Erreur lors de la suppression du locataire');
+      }
       setTenants(prev => prev.filter(t => t.id !== id));
     } catch (err) {
       setError(handleSupabaseError(err));
