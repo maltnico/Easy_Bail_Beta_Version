@@ -54,3 +54,25 @@ export const getPropertyIconBg = (type: string): string => {
   };
   return bgMap[type as keyof typeof bgMap] || 'bg-gray-50';
 };
+
+export const getStatusColor = (status: string): string => {
+  const colorMap = {
+    occupied: 'text-green-600',
+    vacant: 'text-red-600',
+    maintenance: 'text-yellow-600',
+    renovation: 'text-orange-600',
+    sold: 'text-gray-600',
+  };
+  return colorMap[status as keyof typeof colorMap] || 'text-gray-400';
+};
+
+export const getStatusBg = (status: string): string => {
+  const bgMap = {
+    occupied: 'bg-green-50',
+    vacant: 'bg-red-50',
+    maintenance: 'bg-yellow-50',
+    renovation: 'bg-orange-50',
+    sold: 'bg-gray-50',
+  };
+  return bgMap[status as keyof typeof bgMap] || 'bg-gray-50';
+};
