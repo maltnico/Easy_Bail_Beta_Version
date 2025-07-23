@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useEffect } from 'react';
+import { useTheme } from '../../hooks/useTheme';
 import { 
   Settings as SettingsIcon, 
   User, 
@@ -31,6 +32,7 @@ import { useAuth } from '../../hooks/useAuth';
 
 const Settings = () => {
   const { user, profile, updateProfile } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
@@ -102,7 +104,6 @@ const Settings = () => {
     timezone: 'Europe/Paris',
     dateFormat: 'DD/MM/YYYY',
     currency: 'EUR',
-    theme: 'light',
     autoSave: true,
     compactView: false
   });
@@ -494,19 +495,25 @@ const Settings = () => {
         <div className="mt-6 space-y-4">
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center space-x-3">
-              {appSettings.theme === 'light' ? <Sun className="h-5 w-5 text-gray-600" /> : <Moon className="h-5 w-5 text-gray-600" />}
+              {theme === 'light' ? (
+                <Sun className="h-5 w-5 text-gray-600" />
+              ) : theme === 'dark' ? (
+                <Moon className="h-5 w-5 text-gray-600" />
+              ) : (
+                <Globe className="h-5 w-5 text-gray-600" />
+              )}
               <div>
-                <p className="font-medium text-gray-900">Thème</p>
+                <p className="font-medium text-gray-900">Apparence de l'interface</p>
                 <p className="text-sm text-gray-500">Apparence de l'interface</p>
               </div>
             </div>
             <select
-              value={appSettings.theme}
-              onChange={(e) => setAppSettings(prev => ({ ...prev, theme: e.target.value }))}
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'auto')}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="light">Clair</option>
-              <option value="dark">Sombre</option>
+              <option value="dark">Foncé</option>
               <option value="auto">Automatique</option>
             </select>
           </div>
