@@ -217,6 +217,32 @@ export const auth = {
 
       if (error) throw error;
 
+      // Créer le profil utilisateur après l'inscription réussie
+      if (data.user?.id) {
+        try {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              email: email,
+              first_name: userData.firstName,
+              last_name: userData.lastName,
+              company_name: userData.companyName,
+              phone: userData.phone,
+              plan: 'starter',
+              trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+              subscription_status: 'trial',
+              role: 'user'
+            });
+          
+          if (profileError) {
+            console.warn('Erreur lors de la création du profil:', profileError);
+          }
+        } catch (profileCreationError) {
+          console.warn('Impossible de créer le profil:', profileCreationError);
+        }
+      }
+
       // Log de l'activité si possible
       try {
         await activityService.addActivity({
