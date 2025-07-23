@@ -32,19 +32,20 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
     postalCode: property?.postalCode || '',
     type: property?.type || '',
     status: property?.status || '',
-    rent: property?.rent || '',
-    charges: property?.charges || '',
-    surface: property?.surface || '',
-    rooms: property?.rooms || '',
+    rent: property?.rent || 0,
+    charges: property?.charges || 0,
+    surface: property?.surface || 0,
+    rooms: property?.rooms || 0,
     description: property?.description || '',
     amenities: property?.amenities || [] as string[],
     images: property?.images || [] as string[]
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const propertyTypes = [
-    { value: '', label: 'Sélectionner un type' },
+    { value: '', label: 'Choisissez le type de bien *' },
     { value: 'apartment', label: 'Appartement' },
     { value: 'house', label: 'Maison' },
     { value: 'studio', label: 'Studio' },
@@ -53,7 +54,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
   ];
 
   const propertyStatuses = [
-    { value: '', label: 'Sélectionner un statut' },
+    { value: '', label: 'Sélectionnez le statut *' },
     { value: 'vacant', label: 'Vacant' },
     { value: 'occupied', label: 'Occupé' },
     { value: 'maintenance', label: 'En maintenance' }
@@ -67,6 +68,10 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    
+    // Marquer le champ comme touché
+    setTouched(prev => ({ ...prev, [name]: true }));
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -93,31 +98,42 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
     if (!formData.name.trim()) {
       newErrors.name = 'Le nom du bien est requis';
     }
+    
     if (!formData.address.trim()) {
       newErrors.address = 'L\'adresse est requise';
     }
+    
     if (!formData.city.trim()) {
       newErrors.city = 'La ville est requise';
     }
-    if (!formData.postalCode.trim()) {
-      newErrors.postalCode = 'Le code postal est requis';
-    } else if (!/^\d{5}$/.test(formData.postalCode.trim())) {
+    
+    if (formData.postalCode && !/^\d{5}$/.test(formData.postalCode.trim())) {
       newErrors.postalCode = 'Le code postal doit contenir 5 chiffres';
     }
+    
     if (!formData.type) {
       newErrors.type = 'Le type de bien est requis';
     }
+    
     if (!formData.status) {
       newErrors.status = 'Le statut est requis';
     }
-    if (!formData.rent || parseFloat(formData.rent) <= 0) {
+    
+    if (!formData.rent || formData.rent <= 0) {
       newErrors.rent = 'Le loyer doit être supérieur à 0';
     }
-    if (!formData.surface || parseFloat(formData.surface) <= 0) {
+    
+    if (!formData.surface || formData.surface <= 0) {
       newErrors.surface = 'La surface doit être supérieure à 0';
     }
-    if (!formData.rooms || parseInt(formData.rooms) <= 0) {
+    
+    if (!formData.rooms || formData.rooms <= 0) {
       newErrors.rooms = 'Le nombre de pièces doit être supérieur à 0';
+    }
+    
+    // Validation conditionnelle pour les charges
+    if (formData.charges && formData.charges < 0) {
+      newErrors.charges = 'Les charges ne peuvent pas être négatives';
     }
     
     setErrors(newErrors);
@@ -163,7 +179,12 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Home className="h-5 w-5 mr-2 text-blue-600" />
+              Informations générales
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Nom du bien *
@@ -178,7 +199,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.name ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   }`}
-                  placeholder="Ex: Appartement Bastille"
+                  placeholder="Donnez un nom à votre bien"
                 />
               </div>
               {errors.name && (
@@ -208,10 +229,18 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                 <p className="mt-1 text-sm text-red-600">{errors.type}</p>
               )}
             </div>
+            </div>
+          </div>
           </div>
 
           {/* Address */}
           <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <MapPin className="h-5 w-5 mr-2 text-green-600" />
+              Localisation
+            </h3>
+            <div className="space-y-4">
+            <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Adresse *
             </label>
@@ -225,16 +254,17 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   errors.address ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}
-                placeholder="15 rue de la Roquette"
+                placeholder="Numéro et nom de rue"
               />
             </div>
             {errors.address && (
               <p className="mt-1 text-sm text-red-600">{errors.address}</p>
             )}
+            </div>
           </div>
 
           {/* City and Postal Code */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Ville *
@@ -247,7 +277,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   errors.city ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}
-                placeholder="Paris"
+                placeholder="Nom de la ville"
               />
               {errors.city && (
                 <p className="mt-1 text-sm text-red-600">{errors.city}</p>
@@ -256,7 +286,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Code postal *
+                Code postal
               </label>
               <input
                 type="text"
@@ -266,17 +296,24 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   errors.postalCode ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}
-                placeholder="75011"
+                placeholder="Code postal (5 chiffres)"
                 maxLength={5}
               />
               {errors.postalCode && (
                 <p className="mt-1 text-sm text-red-600">{errors.postalCode}</p>
               )}
             </div>
+            </div>
+            </div>
           </div>
 
           {/* Property Details */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Ruler className="h-5 w-5 mr-2 text-purple-600" />
+              Caractéristiques
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Surface (m²) *
@@ -288,12 +325,12 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                   name="surface"
                   value={formData.surface}
                   onChange={handleInputChange}
-                  min="1"
+                  min="0"
                   step="0.1"
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.surface ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   }`}
-                  placeholder="45"
+                  placeholder="Surface en m²"
                 />
               </div>
               {errors.surface && (
@@ -312,11 +349,11 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                   name="rooms"
                   value={formData.rooms}
                   onChange={handleInputChange}
-                  min="1"
+                  min="0"
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.rooms ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   }`}
-                  placeholder="2"
+                  placeholder="Nombre de pièces"
                 />
               </div>
               {errors.rooms && (
@@ -340,7 +377,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.rent ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   }`}
-                  placeholder="1200"
+                  placeholder="Montant du loyer"
                 />
               </div>
               {errors.rent && (
@@ -362,14 +399,24 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                   min="0"
                   step="0.01"
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="150"
+                  placeholder="Montant des charges"
                 />
               </div>
+              {errors.charges && (
+                <p className="mt-1 text-sm text-red-600">{errors.charges}</p>
+              )}
+            </div>
             </div>
           </div>
 
           {/* Status */}
           <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Settings className="h-5 w-5 mr-2 text-indigo-600" />
+              Statut et description
+            </h3>
+            <div className="space-y-4">
+            <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Statut du bien *
             </label>
@@ -390,12 +437,13 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
             {errors.status && (
               <p className="mt-1 text-sm text-red-600">{errors.status}</p>
             )}
+            </div>
           </div>
 
           {/* Description */}
-          <div>
+            <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
+              Description du bien
             </label>
             <textarea
               name="description"
@@ -403,18 +451,25 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
               onChange={handleInputChange}
               rows={4}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Description détaillée du bien..."
+              placeholder="Décrivez votre bien, ses particularités, son environnement..."
             />
+            </div>
+            </div>
           </div>
 
           {/* Amenities */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <CheckCircle className="h-5 w-5 mr-2 text-emerald-600" />
               Équipements et commodités
+            </h3>
+            <div>
+            <label className="block text-sm font-medium text-gray-700 mb-4">
+              Sélectionnez les équipements disponibles
             </label>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {amenitiesList.map(amenity => (
-                <label key={amenity} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <label key={amenity} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors">
                   <input
                     type="checkbox"
                     checked={formData.amenities.includes(amenity)}
@@ -425,42 +480,50 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
                 </label>
               ))}
             </div>
+            </div>
           </div>
 
           {/* Images Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Camera className="h-5 w-5 mr-2 text-pink-600" />
               Photos du bien
+            </h3>
+            <div>
+            <label className="block text-sm font-medium text-gray-700 mb-4">
+              Ajoutez des photos pour valoriser votre bien
             </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 hover:bg-blue-50 transition-colors">
               <Camera className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 mb-2">Glissez-déposez vos photos ici</p>
-              <p className="text-sm text-gray-500 mb-4">ou</p>
-              <button
+              <p className="text-gray-600 mb-2 font-medium">Ajoutez des photos de qualité</p>
+              <p className="text-sm text-gray-500 mb-4">Glissez-déposez vos fichiers ou cliquez pour sélectionner</p>
+              <label
                 type="button"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 mx-auto"
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 mx-auto cursor-pointer"
               >
                 <Upload className="h-4 w-4" />
                 <span>Choisir des fichiers</span>
-              </button>
+                <input type="file" multiple accept="image/*" className="hidden" />
+              </label>
               <p className="text-xs text-gray-500 mt-2">
-                Formats acceptés: JPG, PNG, WebP (max 5MB par photo)
+                Formats acceptés : JPG, PNG, WebP • Taille max : 5MB par photo
               </p>
+            </div>
             </div>
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
+          <div className="flex items-center justify-end space-x-4 pt-8 border-t border-gray-200">
             <button
               type="button"
               onClick={onCancel}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 font-medium shadow-sm hover:shadow-md"
             >
               <Save className="h-5 w-5" />
               <span>{property ? 'Mettre à jour' : 'Créer le bien'}</span>
