@@ -2,6 +2,52 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database';
 import { activityService } from './activityService';
 
+// Helper function to ensure user profile exists
+const ensureUserProfile = async (userId: string): Promise<void> => {
+  try {
+    // Check if profile already exists
+    const { data: existingProfile, error: checkError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+    
+    if (checkError) {
+      throw checkError;
+    }
+    
+    if (existingProfile) {
+      // Profile already exists
+      return;
+    }
+    
+    // Get user data from auth
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error('Impossible de récupérer les données utilisateur');
+    }
+    
+    // Create profile
+    const { error: insertError } = await supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        email: user.email || '',
+        first_name: user.user_metadata?.first_name || 'Utilisateur',
+        last_name: user.user_metadata?.last_name || '',
+        company_name: user.user_metadata?.company_name || null,
+        phone: user.user_metadata?.phone || null
+      });
+    
+    if (insertError) {
+      throw insertError;
+    }
+  } catch (error) {
+    console.error('Erreur lors de la création du profil utilisateur:', error);
+    throw new Error('Impossible de créer le profil utilisateur. Veuillez vous reconnecter.');
+  }
+};
+
 // Types pour l'authentification
 export type AuthUser = {
   id: string;
