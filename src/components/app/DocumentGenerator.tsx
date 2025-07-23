@@ -22,7 +22,7 @@ import { documentTemplates } from '../../lib/documentTemplates';
 import { documentGenerator } from '../../lib/documentGenerator';
 import { documentStorage } from '../../lib/documentStorage';
 import { localDocumentStorage } from '../../lib/localDocumentStorage';
-import { useProperties } from '../../hooks/useProperties';
+import { useProperties } from '../../hooks/data';
 import { useTenants } from '../../hooks/useTenants';
 import DocumentForm from './DocumentForm';
 import DocumentViewer from './DocumentViewer';
