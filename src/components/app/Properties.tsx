@@ -10,7 +10,9 @@ import {
   MapPin,
   Users,
   DollarSign,
-  Ruler
+  Ruler,
+  Grid3X3,
+  List
 } from 'lucide-react';
 import { useProperties } from '../../hooks/useProperties';
 import { Property } from '../../types';
