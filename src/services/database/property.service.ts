@@ -29,7 +29,14 @@ export class PropertyService extends BaseService<Property, DatabaseProperty> {
     if (property.name !== undefined) dbProperty.name = property.name;
     if (property.address !== undefined) dbProperty.address = property.address;
     if (property.type !== undefined) dbProperty.type = property.type;
-    if (property.status !== undefined) dbProperty.status = property.status;
+    if (property.status !== undefined) {
+      // Ensure status is one of the valid enum values
+      const validStatuses = ['available', 'rented', 'maintenance', 'sold'];
+      dbProperty.status = validStatuses.includes(property.status) ? property.status : 'available';
+    } else {
+      // Default to 'available' if status is not provided
+      dbProperty.status = 'available';
+    }
     if (property.rent !== undefined) dbProperty.rent = property.rent;
     if (property.charges !== undefined) dbProperty.charges = property.charges;
     if (property.surface !== undefined) dbProperty.surface = property.surface;
