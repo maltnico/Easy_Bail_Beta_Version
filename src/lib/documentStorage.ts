@@ -1,16 +1,6 @@
 import { supabase } from './supabase';
 import { GeneratedDocument, DocumentTemplate } from '../types/documents';
 import { documentTemplates } from './documentTemplates';
-import { localDocumentStorage } from './localDocumentStorage';
-
-// Fonction pour générer un UUID valide
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
 
 class DocumentStorage {
   private bucketName = 'documents';
@@ -79,8 +69,12 @@ class DocumentStorage {
           fileSizeLimit: 10485760 // 10MB
         });
         
-        if (createError && !createError.message.includes('already exists')) {
-          console.warn('Error creating bucket:', createError);
+        if (createError) {
+          // Only warn if it's not the "already exists" error
+          const errorMessage = (createError as any)?.message || '';
+          if (!errorMessage.includes('already exists')) {
+            console.warn('Error creating bucket:', createError);
+          }
         }
       } catch (createError) {
         console.warn('Error creating bucket:', createError);
@@ -137,8 +131,6 @@ class DocumentStorage {
           
           if (!error) {
             console.log('Document saved to Supabase successfully');
-            // Also save to localStorage as backup
-            await localDocumentStorage.saveDocument(document);
             return document;
           } else {
             console.warn('Failed to save to Supabase:', error);
@@ -148,29 +140,13 @@ class DocumentStorage {
         }
       }
       
-      // Fallback to localStorage but remove PDF data to prevent quota issues
+      // Fallback to localStorage
       console.warn('Falling back to localStorage for document storage');
-      const documentForLocalStorage = { ...document };
-      
-      // Remove large PDF data from metadata to prevent quota exceeded error
-      if (documentForLocalStorage.metadata.pdfData) {
-        delete documentForLocalStorage.metadata.pdfData;
-        console.warn('PDF data removed from document to fit in localStorage');
-      }
-      
-      return await localDocumentStorage.saveDocument(documentForLocalStorage);
+      return await this.saveDocumentToLocalStorage(document);
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde du document dans Supabase:', error);
-      console.warn('Falling back to localStorage for document storage');
-      
-      // Remove PDF data before saving to localStorage
-      const documentForLocalStorage = { ...document };
-      if (documentForLocalStorage.metadata.pdfData) {
-        delete documentForLocalStorage.metadata.pdfData;
-        console.warn('PDF data removed from document to fit in localStorage');
-      }
-      
-      return await localDocumentStorage.saveDocument(documentForLocalStorage);
+      console.error('Erreur lors de la sauvegarde du document:', error);
+      // Final fallback to localStorage
+      return await this.saveDocumentToLocalStorage(document);
     }
   }
   
@@ -273,11 +249,40 @@ class DocumentStorage {
   // Fallback method to get documents from localStorage
   private getDocumentsFromLocalStorage(): Promise<GeneratedDocument[]> {
     try {
-      return localDocumentStorage.getDocumentsList();
+      const STORAGE_KEY = 'easybail_documents';
+      const documentsJson = localStorage.getItem(STORAGE_KEY);
+      
+      if (!documentsJson) {
+        return Promise.resolve([]);
+      }
+      
+      const documents = JSON.parse(documentsJson);
+      
+      // Convert date strings back to Date objects
+      const convertedDocuments = documents.map((doc: any) => ({
+        ...doc,
+        createdAt: new Date(doc.createdAt),
+        updatedAt: new Date(doc.updatedAt),
+        signedAt: doc.signedAt ? new Date(doc.signedAt) : undefined,
+        expiresAt: doc.expiresAt ? new Date(doc.expiresAt) : undefined
+      }));
+      
+      return Promise.resolve(convertedDocuments);
     } catch (error) {
       console.error('Error loading documents from localStorage:', error);
       return Promise.resolve([]);
-      }
+    }
+  }
+
+  // Get single document from localStorage
+  private async getDocumentFromLocalStorage(id: string): Promise<GeneratedDocument | null> {
+    try {
+      const documents = await this.getDocumentsFromLocalStorage();
+      return documents.find(doc => doc.id === id) || null;
+    } catch (error) {
+      console.error('Error getting document from localStorage:', error);
+      return null;
+    }
   }
 
   // Récupérer un document par ID
@@ -316,7 +321,7 @@ class DocumentStorage {
       }
       
       // Fallback to localStorage
-      return await localDocumentStorage.getDocument(id);
+      return await this.getDocumentFromLocalStorage(id);
     } catch (error) {
       console.error('Erreur lors de la récupération du document:', error);
       return null;
@@ -327,13 +332,8 @@ class DocumentStorage {
   // Récupérer les documents par bien
   async getDocumentsByProperty(propertyId: string): Promise<GeneratedDocument[]> {
     try {
-      // Try Supabase first, then fallback to localStorage
-      try {
-        const documents = await this.getDocumentsList();
-        return documents.filter(doc => doc.propertyId === propertyId);
-      } catch (error) {
-        return await localDocumentStorage.getDocumentsByProperty(propertyId);
-      }
+      const documents = await this.getDocumentsList();
+      return documents.filter(doc => doc.propertyId === propertyId);
     } catch (error) {
       console.error('Erreur lors de la récupération des documents par bien:', error);
       return [];
@@ -343,13 +343,8 @@ class DocumentStorage {
   // Récupérer les documents par locataire
   async getDocumentsByTenant(tenantId: string): Promise<GeneratedDocument[]> {
     try {
-      // Try Supabase first, then fallback to localStorage
-      try {
-        const documents = await this.getDocumentsList();
-        return documents.filter(doc => doc.tenantId === tenantId);
-      } catch (error) {
-        return await localDocumentStorage.getDocumentsByTenant(tenantId);
-      }
+      const documents = await this.getDocumentsList();
+      return documents.filter(doc => doc.tenantId === tenantId);
     } catch (error) {
       console.error('Erreur lors de la récupération des documents par locataire:', error);
       return [];
@@ -359,30 +354,25 @@ class DocumentStorage {
   // Mettre à jour le statut d'un document
   async updateDocumentStatus(id: string, status: GeneratedDocument['status']): Promise<GeneratedDocument> {
     try {
-      // Try Supabase first, then fallback to localStorage
-      try {
-        // Get the document first
-        const document = await this.getDocument(id);
-        
-        if (!document) {
-          throw new Error('Document non trouvé');
-        }
-        
-        // Mettre à jour le statut
-        document.status = status;
-        document.updatedAt = new Date();
-        
-        if (status === 'signed') {
-          document.signedAt = new Date();
-        }
-        
-        // Save the updated document
-        await this.saveDocument(document);
-        
-        return document;
-      } catch (error) {
-        return await localDocumentStorage.updateDocumentStatus(id, status);
+      // Get the document first
+      const document = await this.getDocument(id);
+      
+      if (!document) {
+        throw new Error('Document non trouvé');
       }
+      
+      // Mettre à jour le statut
+      document.status = status;
+      document.updatedAt = new Date();
+      
+      if (status === 'received') {
+        document.signedAt = new Date();
+      }
+      
+      // Save the updated document
+      await this.saveDocument(document);
+      
+      return document;
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut du document:', error);
       throw error;
@@ -398,31 +388,43 @@ class DocumentStorage {
       if (bucketReady) {
         try {
           const userId = await this.getCurrentUserId();
-          if (!userId) {
-            throw new Error('User not authenticated');
-          }
-          
-          const { error } = await supabase.storage
-            .from(this.bucketName)
-            .remove([`${userId}/${id}.json`]);
-          
-          if (!error) {
-            console.log('Document deleted from Supabase successfully');
-            return;
-          } else {
-            console.warn('Failed to delete from Supabase:', error);
+          if (userId) {
+            const { error } = await supabase.storage
+              .from(this.bucketName)
+              .remove([`${userId}/${id}.json`]);
+            
+            if (!error) {
+              console.log('Document deleted from Supabase successfully');
+            } else {
+              console.warn('Failed to delete from Supabase:', error);
+            }
           }
         } catch (supabaseError) {
           console.warn('Error deleting from Supabase:', supabaseError);
         }
       }
       
-      // Fallback to localStorage
-      console.warn('Falling back to localStorage for document deletion');
-      await localDocumentStorage.deleteDocument(id);
+      // Always try to delete from localStorage as well
+      await this.deleteDocumentFromLocalStorage(id);
     } catch (error) {
       console.error('Erreur lors de la suppression du document:', error);
       throw error;
+    }
+  }
+
+  // Delete document from localStorage
+  private async deleteDocumentFromLocalStorage(id: string): Promise<void> {
+    try {
+      const STORAGE_KEY = 'easybail_documents';
+      const documentsJson = localStorage.getItem(STORAGE_KEY);
+      
+      if (documentsJson) {
+        const documents = JSON.parse(documentsJson);
+        const filteredDocuments = documents.filter((doc: any) => doc.id !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(filteredDocuments));
+      }
+    } catch (error) {
+      console.error('Error deleting document from localStorage:', error);
     }
   }
 
@@ -434,19 +436,14 @@ class DocumentStorage {
   // Rechercher des documents
   async searchDocuments(query: string): Promise<GeneratedDocument[]> {
     try {
-      // Try Supabase first, then fallback to localStorage
-      try {
-        const documents = await this.getDocumentsList();
-        const lowercaseQuery = query.toLowerCase();
-        
-        return documents.filter(doc => 
-          doc.name.toLowerCase().includes(lowercaseQuery) ||
-          doc.type.toLowerCase().includes(lowercaseQuery) ||
-          doc.content.toLowerCase().includes(lowercaseQuery)
-        );
-      } catch (error) {
-        return await localDocumentStorage.searchDocuments(query);
-      }
+      const documents = await this.getDocumentsList();
+      const lowercaseQuery = query.toLowerCase();
+      
+      return documents.filter(doc => 
+        doc.name.toLowerCase().includes(lowercaseQuery) ||
+        doc.type.toLowerCase().includes(lowercaseQuery) ||
+        doc.content.toLowerCase().includes(lowercaseQuery)
+      );
     } catch (error) {
       console.error('Erreur lors de la recherche de documents:', error);
       return [];
@@ -461,34 +458,23 @@ class DocumentStorage {
     recent: number;
   }> {
     try {
-      // Try Supabase first, then fallback to localStorage
-      try {
-        const documents = await this.getDocumentsList();
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        
-        const stats = {
-          total: documents.length,
-          byStatus: {} as Record<string, number>,
-          byType: {} as Record<string, number>,
-          recent: documents.filter(doc => doc.createdAt > oneWeekAgo).length
-        };
-        
-        documents.forEach(doc => {
-          stats.byStatus[doc.status] = (stats.byStatus[doc.status] || 0) + 1;
-          stats.byType[doc.type] = (stats.byType[doc.type] || 0) + 1;
-        });
-        
-        return stats;
-      } catch (error) {
-        const localStats = await localDocumentStorage.getDocumentStats();
-        return {
-          total: localStats.total,
-          byStatus: localStats.byStatus,
-          byType: localStats.byType,
-          recent: localStats.recent
-        };
-      }
+      const documents = await this.getDocumentsList();
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      
+      const stats = {
+        total: documents.length,
+        byStatus: {} as Record<string, number>,
+        byType: {} as Record<string, number>,
+        recent: documents.filter(doc => doc.createdAt > oneWeekAgo).length
+      };
+      
+      documents.forEach(doc => {
+        stats.byStatus[doc.status] = (stats.byStatus[doc.status] || 0) + 1;
+        stats.byType[doc.type] = (stats.byType[doc.type] || 0) + 1;
+      });
+      
+      return stats;
     } catch (error) {
       console.error('Erreur lors de la récupération des statistiques:', error);
       return {
@@ -503,9 +489,28 @@ class DocumentStorage {
   // Obtenir l'URL publique d'un document (pour le partage)
   async getPublicUrl(id: string): Promise<string | null> {
     try {
+      // Try Supabase first
+      const bucketReady = await this.initializeBucket();
+      
+      if (bucketReady) {
+        try {
+          const userId = await this.getCurrentUserId();
+          if (userId) {
+            const { data } = await supabase.storage
+              .from(this.bucketName)
+              .createSignedUrl(`${userId}/${id}.json`, 3600); // 1 hour expiry
+            
+            if (data?.signedUrl) {
+              return data.signedUrl;
+            }
+          }
+        } catch (supabaseError) {
+          console.warn('Error getting public URL from Supabase:', supabaseError);
+        }
+      }
+      
       // Pour le stockage local, on ne peut pas créer d'URL publique
-      // On pourrait implémenter une solution avec Blob URLs si nécessaire
-      console.warn('getPublicUrl n\'est pas disponible en mode stockage local');
+      console.warn('getPublicUrl n\'est pas disponible en mode stockage local pour le document:', id);
       return null;
     } catch (error) {
       console.error('Erreur lors de la génération de l\'URL publique:', error);

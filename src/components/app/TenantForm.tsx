@@ -5,8 +5,7 @@ import {
   User, 
   Mail, 
   Phone, 
-  Calendar, 
-  DollarSign,
+  Calendar,
   MapPin,
   FileText
 } from 'lucide-react';
@@ -18,6 +17,7 @@ interface TenantFormProps {
   onSave: (tenant: Partial<Tenant>) => void;
   onCancel: () => void;
   isOpen: boolean;
+  isSaving?: boolean;
 }
 
 const TenantForm: React.FC<TenantFormProps> = ({ 
@@ -25,7 +25,8 @@ const TenantForm: React.FC<TenantFormProps> = ({
   properties,
   onSave, 
   onCancel, 
-  isOpen 
+  isOpen,
+  isSaving = false
 }) => {
   const [formData, setFormData] = useState({
     firstName: tenant?.firstName || '',
@@ -44,13 +45,10 @@ const TenantForm: React.FC<TenantFormProps> = ({
 
   const tenantStatuses = [
     { value: 'active', label: 'Actif' },
-    { value: 'notice', label: 'En préavis' },
-    { value: 'former', label: 'Ancien locataire' }
+    { value: 'pending', label: 'En attente' },
+    { value: 'inactive', label: 'Inactif' },
+    { value: 'terminated', label: 'Résilié' }
   ];
-
-  const availableProperties = properties.filter(p => 
-    p.status === 'vacant' || (tenant && p.id === tenant.propertyId) || p.status === 'maintenance'
-  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -82,31 +80,67 @@ const TenantForm: React.FC<TenantFormProps> = ({
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
+    // Validation du prénom
     if (!formData.firstName.trim()) {
       newErrors.firstName = 'Le prénom est requis';
+    } else if (formData.firstName.trim().length < 2) {
+      newErrors.firstName = 'Le prénom doit contenir au moins 2 caractères';
     }
+    
+    // Validation du nom
     if (!formData.lastName.trim()) {
       newErrors.lastName = 'Le nom est requis';
+    } else if (formData.lastName.trim().length < 2) {
+      newErrors.lastName = 'Le nom doit contenir au moins 2 caractères';
     }
+    
+    // Validation de l'email
     if (!formData.email.trim()) {
       newErrors.email = 'L\'email est requis';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Format d\'email invalide';
     }
+    
+    // Validation de la propriété
     if (!formData.propertyId) {
       newErrors.propertyId = 'Veuillez sélectionner un bien';
     }
+    
+    // Validation des dates
     if (!formData.leaseStart) {
       newErrors.leaseStart = 'La date de début de bail est requise';
     }
     if (!formData.leaseEnd) {
       newErrors.leaseEnd = 'La date de fin de bail est requise';
     }
-    if (formData.leaseStart && formData.leaseEnd && formData.leaseStart >= formData.leaseEnd) {
-      newErrors.leaseEnd = 'La date de fin doit être postérieure à la date de début';
+    
+    // Validation de l'ordre des dates
+    if (formData.leaseStart && formData.leaseEnd) {
+      const startDate = new Date(formData.leaseStart);
+      const endDate = new Date(formData.leaseEnd);
+      
+      if (startDate >= endDate) {
+        newErrors.leaseEnd = 'La date de fin doit être postérieure à la date de début';
+      }
+      
+      // Vérifier que la durée du bail est raisonnable (au moins 1 mois)
+      const diffTime = endDate.getTime() - startDate.getTime();
+      const diffDays = diffTime / (1000 * 3600 * 24);
+      if (diffDays < 30) {
+        newErrors.leaseEnd = 'La durée du bail doit être d\'au moins 30 jours';
+      }
     }
+    
+    // Validation du loyer
     if (formData.rent <= 0) {
       newErrors.rent = 'Le loyer doit être supérieur à 0';
+    } else if (formData.rent > 10000) {
+      newErrors.rent = 'Le loyer semble très élevé, veuillez vérifier';
+    }
+    
+    // Validation du dépôt de garantie
+    if (formData.deposit < 0) {
+      newErrors.deposit = 'Le dépôt de garantie ne peut pas être négatif';
     }
     
     setErrors(newErrors);
@@ -126,6 +160,15 @@ const TenantForm: React.FC<TenantFormProps> = ({
       ...(tenant && { createdAt: tenant.createdAt })
     };
     
+    console.log('🔄 Création du locataire avec les données:', tenantToSave);
+    console.log('📋 Validation:', {
+      propertySelected: !!formData.propertyId,
+      datesValid: formData.leaseStart && formData.leaseEnd,
+      datesOrder: formData.leaseStart < formData.leaseEnd,
+      rentValid: formData.rent > 0,
+      contactValid: formData.firstName && formData.lastName && formData.email
+    });
+    
     onSave(tenantToSave);
   };
 
@@ -134,10 +177,7 @@ const TenantForm: React.FC<TenantFormProps> = ({
     if (!property) return '';
     
     const typeLabel = getTypeLabel(property.type);
-    const statusLabel = property.status === 'vacant' ? 'Vacant' : 
-                       property.status === 'maintenance' ? 'Maintenance' : 'Occupé';
-    
-    return `${property.name} - ${typeLabel} - ${property.rent}€/mois (${property.surface}m², ${property.rooms}P) - ${statusLabel}`;
+    return `${property.name} - ${typeLabel} - ${property.rent}€/mois (${property.surface}m², ${property.rooms}P)`;
   };
 
   const getTypeLabel = (type: string) => {
@@ -297,19 +337,25 @@ const TenantForm: React.FC<TenantFormProps> = ({
                     }`}
                   >
                     <option value="">Sélectionner un bien</option>
-                    {availableProperties.map(property => (
+                    
+                    {properties.map(property => (
                       <option key={property.id} value={property.id}>
                         {getPropertyDisplayInfo(property.id)}
                       </option>
                     ))}
+                    
+                    {properties.length === 0 && (
+                      <option disabled>Aucune propriété trouvée</option>
+                    )}
                   </select>
                 </div>
                 {errors.propertyId && (
                   <p className="mt-1 text-sm text-red-600">{errors.propertyId}</p>
                 )}
-                {availableProperties.length === 0 && (
-                  <p className="mt-1 text-sm text-yellow-600">
-                    Aucun bien disponible. Vérifiez que vous avez créé des biens et qu'ils sont vacants.
+                
+                {properties.length === 0 && (
+                  <p className="mt-1 text-sm text-red-600">
+                    Aucun bien trouvé. Veuillez d'abord créer des biens immobiliers avant d'ajouter des locataires.
                   </p>
                 )}
                 
@@ -483,16 +529,27 @@ const TenantForm: React.FC<TenantFormProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={isSaving}
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              disabled={isSaving}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="h-5 w-5" />
-              <span>{tenant ? 'Mettre à jour' : 'Créer le locataire'}</span>
+              {isSaving ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>Sauvegarde...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-5 w-5" />
+                  <span>{tenant ? 'Mettre à jour' : 'Créer le locataire'}</span>
+                </>
+              )}
             </button>
           </div>
         </form>

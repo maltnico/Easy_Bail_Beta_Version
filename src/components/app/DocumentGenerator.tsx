@@ -21,7 +21,6 @@ import { DocumentTemplate, GeneratedDocument } from '../../types/documents';
 import { documentTemplates } from '../../lib/documentTemplates';
 import { documentGenerator } from '../../lib/documentGenerator';
 import { documentStorage } from '../../lib/documentStorage';
-import { localDocumentStorage } from '../../lib/localDocumentStorage';
 import { useProperties } from '../../hooks/useProperties';
 import { useTenants } from '../../hooks/useTenants';
 import DocumentForm from './DocumentForm';
@@ -73,7 +72,7 @@ const DocumentGenerator = () => {
               templateId: 'lease-contract',
               name: 'Contrat de bail - Appartement Bastille',
               type: 'lease',
-              status: 'signed',
+              status: 'received',
               propertyId: '1',
               tenantId: '1',
               userId: 'current-user',
@@ -102,7 +101,7 @@ const DocumentGenerator = () => {
               templateId: 'inventory-report',
               name: 'État des lieux d\'entrée - Appartement Bastille',
               type: 'inventory',
-              status: 'signed',
+              status: 'received',
               propertyId: '1',
               tenantId: '1',
               userId: 'current-user',
@@ -123,7 +122,7 @@ const DocumentGenerator = () => {
               templateId: 'rent-receipt',
               name: 'Quittance Novembre 2024',
               type: 'receipt',
-              status: 'signed',
+              status: 'received',
               propertyId: '1',
               tenantId: '1',
               userId: 'current-user',
@@ -764,8 +763,9 @@ Votre propriétaire`);
   const documentStats = {
     total: documents.length,
     draft: documents.filter(d => d.status === 'draft').length,
-    pending: documents.filter(d => d.status === 'pending_signature').length,
-    sent: documents.filter(d => d.status === 'sent').length
+    pending: documents.filter(d => d.status === 'sent').length,
+    sent: documents.filter(d => d.status === 'sent').length,
+    signed: documents.filter(d => d.status === 'received').length
   };
 
   return (
@@ -867,8 +867,7 @@ Votre propriétaire`);
                 />
               </div>
             </div>
-            {viewMode !== 'emails' && (
-              <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4">
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
@@ -891,7 +890,7 @@ Votre propriétaire`);
                   >
                     <option value="all">Tous les statuts</option>
                     <option value="draft">Brouillons</option>
-                    <option value="pending_signature">En attente</option>
+                    <option value="sent">En attente</option>
                     <option value="signed">Signés</option>
                     <option value="archived">Archivés</option>
                   </select>
@@ -901,7 +900,6 @@ Votre propriétaire`);
                   <Filter className="h-5 w-5 text-gray-600" />
                 </button>
               </div>
-            )}
           </div>
         </div>
 

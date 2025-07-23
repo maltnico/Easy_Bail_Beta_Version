@@ -3,7 +3,7 @@ export interface Property {
   name: string;
   address: string;
   type: 'apartment' | 'house' | 'studio' | 'parking' | 'commercial';
-  status: 'occupied' | 'vacant' | 'maintenance';
+  status: 'available' | 'rented' | 'maintenance' | 'sold';
   rent: number;
   charges: number;
   surface: number;
@@ -24,7 +24,7 @@ export interface Tenant {
   leaseEnd: Date;
   rent: number;
   deposit: number;
-  status: 'active' | 'notice' | 'former';
+  status: 'active' | 'inactive' | 'pending' | 'terminated';
   createdAt: Date;
 }
 

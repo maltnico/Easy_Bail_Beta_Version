@@ -81,7 +81,7 @@ const convertPropertyFromDB = (property: PropertyRow, tenant?: TenantRow): Prope
     name: property.name,
     address: property.address,
     type: property.type,
-    status: property.status || 'vacant',
+    status: property.status || 'available',
     rent: Number(property.rent),
     charges: Number(property.charges || 0),
     surface: Number(property.surface),
@@ -188,13 +188,13 @@ export const propertiesApi = {
     }
   },
 
-  // Récupérer les biens disponibles pour location (vacants)
+  // Récupérer les biens disponibles pour location
   async getAvailableProperties(): Promise<Property[]> {
     try {
       const { data, error } = await supabase
         .from('properties')
         .select('*')
-        .eq('status', 'vacant')
+        .eq('status', 'available')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -230,7 +230,7 @@ export const propertiesApi = {
         name: propertyData.name,
         address: propertyData.address,
         type: propertyData.type,
-        status: propertyData.status || 'vacant',
+        status: propertyData.status || 'available',
         rent: propertyData.rent,
         charges: propertyData.charges || 0,
         surface: propertyData.surface,
@@ -313,19 +313,22 @@ export const propertiesApi = {
       
       // Log activity
       try {
-        await activityService.addActivity({
-          type: 'property',
-          action: 'updated',
-          title: 'Bien mis à jour',
-          description: `${data.name} a été modifié`,
-          entityId: data.id,
-          entityType: 'property',
-          entityName: data.name,
-          userId: userData.user.id,
-          metadata: propertyUpdate,
-          priority: 'low',
-          category: 'info'
-        });
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user) {
+          await activityService.addActivity({
+            type: 'property',
+            action: 'updated',
+            title: 'Bien mis à jour',
+            description: `${data.name} a été modifié`,
+            entityId: data.id,
+            entityType: 'property',
+            entityName: data.name,
+            userId: userData.user.id,
+            metadata: propertyUpdate,
+            priority: 'low',
+            category: 'info'
+          });
+        }
       } catch (activityError) {
         console.warn('Could not log property update activity:', activityError);
       }
@@ -365,15 +368,18 @@ export const propertiesApi = {
       
       // Log activity
       try {
-        await activityService.addActivity({
-          type: 'property',
-          action: 'deleted',
-          title: 'Bien supprimé',
-          description: `Un bien a été supprimé du portefeuille`,
-          userId: userData.user.id,
-          priority: 'medium',
-          category: 'warning'
-        });
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user) {
+          await activityService.addActivity({
+            type: 'property',
+            action: 'deleted',
+            title: 'Bien supprimé',
+            description: `Un bien a été supprimé du portefeuille`,
+            userId: userData.user.id,
+            priority: 'medium',
+            category: 'warning'
+          });
+        }
       } catch (activityError) {
         console.warn('Could not log property deletion activity:', activityError);
       }
@@ -533,10 +539,10 @@ export const tenantsApi = {
         console.warn('Could not log tenant creation activity:', activityError);
       }
       
-      // Mettre à jour le statut du bien à "occupied"
+      // Mettre à jour le statut du bien à "rented"
       const { error: propertyError } = await supabase
         .from('properties')
-        .update({ status: 'occupied' })
+        .update({ status: 'rented' })
         .eq('id', tenantData.propertyId);
       
       if (propertyError) throw propertyError;
@@ -615,11 +621,11 @@ export const tenantsApi = {
       
       if (error) throw error;
       
-      // Mettre à jour le statut du bien à "vacant"
+      // Mettre à jour le statut du bien à "available"
       if (tenant?.property_id) {
         const { error: propertyError } = await supabase
           .from('properties')
-          .update({ status: 'vacant' })
+          .update({ status: 'available' })
           .eq('id', tenant.property_id);
         
         if (propertyError) throw propertyError;

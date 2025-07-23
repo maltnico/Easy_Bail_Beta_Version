@@ -4,7 +4,7 @@ export interface DatabaseProperty {
   name: string;
   address: string;
   type: 'apartment' | 'house' | 'studio' | 'parking' | 'commercial';
-  status: 'occupied' | 'vacant' | 'maintenance';
+  status: 'available' | 'rented' | 'maintenance' | 'sold';
   rent: number;
   charges: number;
   surface: number;
@@ -26,7 +26,7 @@ export interface DatabaseTenant {
   lease_end: string;
   rent: number;
   deposit: number;
-  status: 'active' | 'notice' | 'former';
+  status: 'active' | 'inactive' | 'pending' | 'terminated';
   created_at: string;
 }
 

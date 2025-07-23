@@ -4,7 +4,6 @@ import {
   Database, 
   Users, 
   Shield, 
-  FileText, 
   Activity,
   Mail,
   Send,
@@ -22,7 +21,6 @@ import EmailQueue from './EmailQueue.tsx';
 import AdminUsers from './AdminUsers';
 import AdminSecurity from './AdminSecurity';
 import AdminLogs from './AdminLogs';
-import LocalDocumentManager from './LocalDocumentManager';
 import AdminDashboard from './AdminDashboard';
 import AdminBackup from './AdminBackup';
 import AdminSystemMonitoring from './AdminSystemMonitoring';
@@ -123,7 +121,6 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
     { id: 'email_templates', label: 'Templates mail', icon: Send },
     { id: 'email_queue', label: 'File d\'attente', icon: Mail },
     { id: 'logs', label: 'Journaux', icon: Activity },
-    { id: 'local_docs', label: 'Documents locaux', icon: FileText },
     { id: 'settings', label: 'Paramètres', icon: Settings }
   ];
 
@@ -182,10 +179,6 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
       case 'logs':
         return (
           <AdminLogs />
-        );
-      case 'local_docs':
-        return (
-          <LocalDocumentManager />
         );
       case 'settings':
         return (

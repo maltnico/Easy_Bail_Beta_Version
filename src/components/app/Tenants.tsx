@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { 
   Users, 
   Plus, 
@@ -9,11 +9,9 @@ import {
   Calendar,
   DollarSign,
   AlertTriangle,
-  CheckCircle,
   Edit,
   Trash2,
   Eye,
-  FileText,
   Clock,
   MapPin,
   Loader2
@@ -24,14 +22,15 @@ import TenantForm from './TenantForm';
 import TenantDetails from './TenantDetails';
 
 const Tenants = () => {
-  const { properties, loading: propertiesLoading } = useProperties();
+  const { properties, loading: propertiesLoading, refreshProperties } = useProperties();
   const { 
     tenants, 
     loading, 
     error, 
     createTenant, 
     updateTenant, 
-    deleteTenant 
+    deleteTenant,
+    refreshTenants 
   } = useTenants();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,6 +39,8 @@ const Tenants = () => {
   const [showTenantDetails, setShowTenantDetails] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [editingTenant, setEditingTenant] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const filteredTenants = tenants.filter(tenant => {
     const matchesSearch = 
@@ -54,9 +55,11 @@ const Tenants = () => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
-      case 'notice':
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'inactive':
         return 'bg-red-100 text-red-800';
-      case 'former':
+      case 'terminated':
         return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -67,18 +70,15 @@ const Tenants = () => {
     switch (status) {
       case 'active':
         return 'Actif';
-      case 'notice':
-        return 'Préavis';
-      case 'former':
-        return 'Ancien';
+      case 'pending':
+        return 'En attente';
+      case 'inactive':
+        return 'Inactif';
+      case 'terminated':
+        return 'Résilié';
       default:
         return status;
     }
-  };
-
-  const getPropertyName = (propertyId: string) => {
-    const property = properties.find(p => p.id === propertyId);
-    return property?.name || 'Bien inconnu';
   };
 
   const getPropertyDetails = (propertyId: string) => {
@@ -109,21 +109,118 @@ const Tenants = () => {
   };
 
   const handleSaveTenant = async (tenantData: any) => {
+    setIsSaving(true);
+    setSaveError(null);
+    
     try {
-      if (editingTenant) {
-        await updateTenant(editingTenant.id, tenantData);
-      } else {
-        await createTenant(tenantData);
+      console.log('🔄 Tentative de sauvegarde du locataire:', tenantData);
+      
+      // Vérifications préliminaires
+      if (!tenantData.propertyId) {
+        throw new Error('Aucune propriété sélectionnée');
       }
+      
+      if (!tenantData.firstName || !tenantData.lastName || !tenantData.email) {
+        throw new Error('Les informations personnelles sont incomplètes');
+      }
+      
+      if (!tenantData.leaseStart || !tenantData.leaseEnd) {
+        throw new Error('Les dates de bail sont manquantes');
+      }
+      
+      if (tenantData.rent <= 0) {
+        throw new Error('Le loyer doit être supérieur à 0');
+      }
+      
+      // Validation des dates
+      const startDate = new Date(tenantData.leaseStart);
+      const endDate = new Date(tenantData.leaseEnd);
+      
+      if (startDate >= endDate) {
+        throw new Error('La date de fin doit être postérieure à la date de début');
+      }
+      
+      // Validation de l'email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(tenantData.email)) {
+        throw new Error('Format d\'email invalide');
+      }
+      
+      if (editingTenant) {
+        console.log('📝 Mise à jour du locataire existant:', editingTenant.id);
+        await updateTenant(editingTenant.id, tenantData);
+        console.log('✅ Locataire mis à jour avec succès');
+      } else {
+        console.log('➕ Création d\'un nouveau locataire');
+        await createTenant(tenantData);
+        console.log('✅ Locataire créé avec succès');
+      }
+      
+      // Fermer le formulaire et rafraîchir
       setShowTenantForm(false);
       setEditingTenant(null);
+      
+      // Rafraîchir les données après un court délai
+      setTimeout(async () => {
+        try {
+          await Promise.all([
+            refreshTenants(),
+            refreshProperties()
+          ]);
+          console.log('🔄 Données rafraîchies avec succès');
+          
+          // Afficher un message de succès
+          const successMessage = editingTenant ? 'Locataire mis à jour avec succès!' : 'Locataire créé avec succès!';
+          
+          // Créer un élément de notification temporaire
+          const notification = document.createElement('div');
+          notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300';
+          notification.textContent = successMessage;
+          document.body.appendChild(notification);
+          
+          // Supprimer la notification après 3 secondes
+          setTimeout(() => {
+            notification.remove();
+          }, 3000);
+          
+        } catch (refreshError) {
+          console.warn('Erreur lors du rafraîchissement:', refreshError);
+        }
+      }, 500);
+      
     } catch (err) {
-      console.error('Erreur lors de la sauvegarde:', err);
+      console.error('❌ Erreur lors de la sauvegarde:', err);
+      
+      let errorMessage = 'Une erreur inconnue est survenue';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (err && typeof err === 'object' && 'message' in err) {
+        errorMessage = String(err.message);
+      }
+      
+      // Gestion des erreurs spécifiques Supabase
+      if (errorMessage.includes('duplicate key value')) {
+        errorMessage = 'Un locataire avec cet email existe déjà';
+      } else if (errorMessage.includes('violates foreign key constraint')) {
+        errorMessage = 'La propriété sélectionnée n\'existe pas ou n\'est pas accessible';
+      } else if (errorMessage.includes('not-null constraint')) {
+        errorMessage = 'Certains champs obligatoires sont manquants';
+      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network error')) {
+        errorMessage = 'Erreur de connexion. Vérifiez votre connexion internet et réessayez.';
+      }
+      
+      setSaveError(errorMessage);
+      alert(`Erreur lors de la sauvegarde: ${errorMessage}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const activeTenants = tenants.filter(t => t.status === 'active').length;
-  const noticeTenants = tenants.filter(t => t.status === 'notice').length;
+  const pendingTenants = tenants.filter(t => t.status === 'pending').length;
   const totalRent = tenants
     .filter(t => t.status === 'active')
     .reduce((sum, t) => sum + t.rent, 0);
@@ -150,6 +247,33 @@ const Tenants = () => {
   }
   return (
     <div className="p-6 space-y-6">
+      {/* Affichage des erreurs de sauvegarde */}
+      {saveError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <AlertTriangle className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">
+                Erreur de sauvegarde
+              </h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>{saveError}</p>
+              </div>
+              <div className="mt-3">
+                <button
+                  onClick={() => setSaveError(null)}
+                  className="text-sm bg-red-100 text-red-800 px-3 py-1 rounded hover:bg-red-200"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -205,8 +329,8 @@ const Tenants = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">En préavis</p>
-              <p className="text-3xl font-bold text-yellow-600">{noticeTenants}</p>
+              <p className="text-sm font-medium text-gray-600">En attente</p>
+              <p className="text-3xl font-bold text-yellow-600">{pendingTenants}</p>
             </div>
             <Clock className="h-8 w-8 text-yellow-600" />
           </div>
@@ -274,8 +398,8 @@ const Tenants = () => {
             >
               <option value="all">Tous les statuts</option>
               <option value="active">Actifs</option>
-              <option value="notice">En préavis</option>
-              <option value="former">Anciens</option>
+              <option value="pending">En attente</option>
+              <option value="terminated">Résiliés</option>
             </select>
             <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
               <Filter className="h-5 w-5 text-gray-600" />
@@ -454,15 +578,17 @@ const Tenants = () => {
         onCancel={() => {
           setShowTenantForm(false);
           setEditingTenant(null);
+          setSaveError(null);
         }}
         isOpen={showTenantForm}
+        isSaving={isSaving}
       />
 
       {/* Tenant Details Modal */}
       {selectedTenant && (
         <TenantDetails
           tenant={selectedTenant}
-          property={getPropertyDetails(selectedTenant.propertyId)}
+          property={getPropertyDetails(selectedTenant.propertyId) || undefined}
           onEdit={() => {
             setShowTenantDetails(false);
             handleEditTenant(selectedTenant);

@@ -41,12 +41,14 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'occupied':
+      case 'rented':
         return 'bg-green-100 text-green-800';
-      case 'vacant':
+      case 'available':
         return 'bg-yellow-100 text-yellow-800';
       case 'maintenance':
-        return 'bg-red-100 text-red-800';
+        return 'bg-orange-100 text-orange-800';
+      case 'sold':
+        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -54,12 +56,14 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'occupied':
-        return 'Occupé';
-      case 'vacant':
-        return 'Vacant';
+      case 'rented':
+        return 'Loué';
+      case 'available':
+        return 'Disponible';
       case 'maintenance':
-        return 'En maintenance';
+        return 'Maintenance';
+      case 'sold':
+        return 'Vendu';
       default:
         return status;
     }

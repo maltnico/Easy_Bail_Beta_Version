@@ -60,7 +60,7 @@ export const useProperties = (): UsePropertiesReturn => {
           const cachedAvailableData = getCachedData<Property[]>(AVAILABLE_PROPERTIES_CACHE_KEY, []);
           setAvailableProperties(cachedAvailableData);
         } else {
-          const availableData = properties.filter(p => p.status === 'vacant' || p.status === 'maintenance');
+          const availableData = properties.filter(p => p.status === 'available' || p.status === 'maintenance');
           setAvailableProperties(availableData);
           cacheData(AVAILABLE_PROPERTIES_CACHE_KEY, availableData);
         }
@@ -91,7 +91,7 @@ export const useProperties = (): UsePropertiesReturn => {
           setProperties(mockProperties);
           
           // Filtrer les biens disponibles
-          const availableData = mockProperties.filter(p => p.status === 'vacant' || p.status === 'maintenance');
+          const availableData = mockProperties.filter(p => p.status === 'available' || p.status === 'maintenance');
           setAvailableProperties(availableData);
           
           // Définir un message d'erreur informatif
@@ -140,8 +140,8 @@ export const useProperties = (): UsePropertiesReturn => {
         category: 'success'
       });
       
-      // Mettre à jour les biens disponibles si le nouveau bien est vacant
-      if (newProperty.status === 'vacant') {
+      // Mettre à jour les biens disponibles si le nouveau bien est available
+      if (newProperty.status === 'available') {
         setAvailableProperties(prev => [newProperty, ...prev]);
       }
     } catch (err) {
