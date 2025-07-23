@@ -32,10 +32,10 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
     address: property?.address || '',
     type: property?.type || '',
     status: property?.status || '',
-    rent: property?.rent || '',
-    charges: property?.charges || '',
-    surface: property?.surface || '',
-    rooms: property?.rooms || '',
+    rent: property?.rent?.toString() || '',
+    charges: property?.charges?.toString() || '',
+    surface: property?.surface?.toString() || '',
+    rooms: property?.rooms?.toString() || '',
     description: property?.description || '',
     amenities: property?.amenities || [] as string[],
     images: property?.images || [] as string[]
@@ -45,7 +45,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const propertyTypes = [
-    { value: '', label: 'Choisissez le type de bien' },
+    { value: '', label: 'Sélectionnez le type de bien' },
     { value: 'apartment', label: 'Appartement' },
     { value: 'house', label: 'Maison' },
     { value: 'studio', label: 'Studio' },
@@ -54,7 +54,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
   ];
 
   const propertyStatuses = [
-    { value: '', label: 'Sélectionnez le statut' },
+    { value: '', label: 'Choisissez le statut' },
     { value: 'vacant', label: 'Vacant' },
     { value: 'occupied', label: 'Occupé' },
     { value: 'maintenance', label: 'En maintenance' }
