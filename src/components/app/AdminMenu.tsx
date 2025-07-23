@@ -8,7 +8,9 @@ import {
   X,
   ChevronRight,
   BarChart3,
-  HardDrive
+  HardDrive,
+  Mail,
+  Send
 } from 'lucide-react';
 import SupabaseConnectionCheck from '../SupabaseConnectionCheck';
 import MailServerConfig from './MailServerConfig';
