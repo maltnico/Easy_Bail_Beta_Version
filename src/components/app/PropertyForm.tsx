@@ -31,7 +31,7 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
     name: property?.name || '',
     address: property?.address || '',
     type: property?.type || '',
-    status: property?.status || '',
+    status: property?.status || 'available',
     rent: property?.rent?.toString() || '',
     charges: property?.charges?.toString() || '',
     surface: property?.surface?.toString() || '',
@@ -54,9 +54,8 @@ const PropertyForm: React.FC<PropertyFormProps> = ({
   ];
 
   const propertyStatuses = [
-    { value: '', label: 'Choisissez le statut' },
-    { value: 'vacant', label: 'Vacant' },
-    { value: 'occupied', label: 'Occupé' },
+    { value: 'available', label: 'Disponible' },
+    { value: 'rented', label: 'Loué' },
     { value: 'maintenance', label: 'En maintenance' }
   ];
 
