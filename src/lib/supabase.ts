@@ -330,10 +330,10 @@ export const auth = {
           .from('profiles')
           .select('*')
           .eq('id', userId)
-          .single();
+          .limit(1);
         
         if (error) throw error;
-        return { data, error: null };
+        return { data: data ? data[0] : null, error: null };
       }
       
       throw new Error('Utilisateur non trouvé');
