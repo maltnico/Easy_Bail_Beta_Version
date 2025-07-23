@@ -1,360 +1,589 @@
-import React, { useState } from 'react';
-import { Search, User, ChevronDown, LogOut, Shield, X, FileText, Building, Users, DollarSign } from 'lucide-react';
-import { AuthUser, useAuth } from '../../hooks/useAuth';
-import NotificationBell from './NotificationBell';
-import AdminMenu from './AdminMenu';
-import { useProperties } from '../../hooks/useProperties';
-import { useTenants } from '../../hooks/useTenants';
-import { useNavigate } from 'react-router-dom';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../types/database';
+import { activityService } from './activityService';
 
-interface TopBarProps {
-  onLogout?: () => void;
-  onNavigateToSection?: (section: string) => void;
-}
-
-// Fonction pour vérifier si l'utilisateur est admin
-const isUserAdmin = (user: any): boolean => {
-  // Vérifier l'email admin
-  if (user?.email === 'admin@easybail.pro' || user?.user_metadata?.email === 'admin@easybail.pro') {
-    return true;
-  }
-  
-  // Vérifier le rôle dans les métadonnées utilisateur
-  if (user?.user_metadata?.role === 'admin') {
-    return true;
-  }
-  
-  // Vérifier le rôle dans le profil
-  if (user?.role === 'admin' || user?.user_metadata?.role === 'admin') {
-    return true;
-  }
-  
-  return false;
+// Types pour l'authentification
+export type AuthUser = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  company_name?: string;
+  phone?: string;
+  plan: 'starter' | 'professional' | 'expert';
+  trial_ends_at: string;
+  subscription_status: 'trial' | 'active' | 'cancelled' | 'expired';
+  role?: 'user' | 'admin' | 'manager';
+  avatar_url?: string;
+  created_at: string;
+  updated_at: string;
 };
 
-const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
-  const { user, profile, signOut } = useAuth();
-  const { properties } = useProperties();
-  const { tenants } = useTenants();
-  const navigate = useNavigate();
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showAdminMenu, setShowAdminMenu] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  
-  // Vérifier si l'utilisateur est admin
-  const userIsAdmin = isUserAdmin(user);
+// Configuration et état de la connexion
+class SupabaseConnection {
+  private client: any = null;
+  private isConfigured = false;
+  private isConnected = false;
+  private connectionAttempts = 0;
+  private maxRetries = 3;
+  private retryDelay = 2000;
+  private lastConnectionCheck = 0;
+  private connectionCheckInterval = 30000; // 30 secondes
 
-  const handleSignOut = async () => {
+  constructor() {
+    this.initialize();
+  }
+
+  private initialize() {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+    // Validation des variables d'environnement
+    this.isConfigured = this.validateConfig(supabaseUrl, supabaseAnonKey);
+
+    if (this.isConfigured) {
+      this.createClient(supabaseUrl, supabaseAnonKey);
+    } else {
+      console.warn('Configuration Supabase invalide - Mode démo activé');
+    }
+  }
+
+  private validateConfig(url: string, key: string): boolean {
+    if (!url || !key) {
+      console.warn('Variables d\'environnement Supabase manquantes');
+      return false;
+    }
+
+    if (url.includes('your-project-id') || key.includes('your-anon-key')) {
+      console.warn('Variables d\'environnement Supabase contiennent des valeurs par défaut');
+      return false;
+    }
+
     try {
-      await signOut();
-      // Appeler la fonction de callback pour rediriger vers la page de login
-      if (onLogout) {
-        onLogout();
+      new URL(url);
+      return true;
+    } catch {
+      console.warn('URL Supabase invalide');
+      return false;
+    }
+  }
+
+  private createClient(url: string, key: string) {
+    this.client = createClient<Database>(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+      global: {
+        fetch: this.createFetchWrapper(),
+      },
+    });
+  }
+
+  private createFetchWrapper() {
+    return async (url: string, options: any = {}) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        
+        // Marquer comme connecté si la requête réussit
+        if (response.ok) {
+          this.isConnected = true;
+          this.connectionAttempts = 0;
+        }
+
+        return response;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        this.handleConnectionError(error);
+        throw error;
+      }
+    };
+  }
+
+  private handleConnectionError(error: any) {
+    const isNetworkError = 
+      error.name === 'AbortError' ||
+      error.name === 'TimeoutError' ||
+      error.message?.includes('Failed to fetch') ||
+      error.message?.includes('NetworkError') ||
+      error.message?.includes('timeout');
+
+    if (isNetworkError) {
+      this.isConnected = false;
+      this.connectionAttempts++;
+      
+      if (this.connectionAttempts <= this.maxRetries) {
+        console.warn(`Tentative de reconnexion ${this.connectionAttempts}/${this.maxRetries}`);
+        setTimeout(() => this.attemptReconnection(), this.retryDelay * this.connectionAttempts);
+      } else {
+        console.warn('Nombre maximum de tentatives de reconnexion atteint');
+      }
+    }
+  }
+
+  private async attemptReconnection() {
+    try {
+      const connected = await this.checkConnection();
+      if (connected) {
+        console.log('Reconnexion Supabase réussie');
+        this.isConnected = true;
+        this.connectionAttempts = 0;
       }
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.warn('Échec de la reconnexion:', error);
     }
-  };
+  }
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    
-    if (query.trim().length < 2) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
+  async checkConnection(): Promise<boolean> {
+    if (!this.isConfigured || !this.client) return false;
+
+    const now = Date.now();
+    if (now - this.lastConnectionCheck < this.connectionCheckInterval) {
+      return this.isConnected;
     }
 
-    const results: any[] = [];
-    const lowercaseQuery = query.toLowerCase();
-
-    // Rechercher dans les biens
-    properties.forEach(property => {
-      if (
-        property.name.toLowerCase().includes(lowercaseQuery) ||
-        property.address.toLowerCase().includes(lowercaseQuery) ||
-        property.type.toLowerCase().includes(lowercaseQuery)
-      ) {
-        results.push({
-          type: 'property',
-          id: property.id,
-          title: property.name,
-          subtitle: property.address,
-          icon: Building,
-          action: () => {
-            if (onNavigateToSection) {
-              onNavigateToSection('properties');
-            }
-            setShowSearchResults(false);
-            setSearchQuery('');
-          }
-        });
-      }
-    });
-
-    // Rechercher dans les locataires
-    tenants.forEach(tenant => {
-      const fullName = `${tenant.firstName} ${tenant.lastName}`;
-      if (
-        fullName.toLowerCase().includes(lowercaseQuery) ||
-        tenant.email.toLowerCase().includes(lowercaseQuery) ||
-        tenant.phone?.toLowerCase().includes(lowercaseQuery)
-      ) {
-        const property = properties.find(p => p.id === tenant.propertyId);
-        results.push({
-          type: 'tenant',
-          id: tenant.id,
-          title: fullName,
-          subtitle: property ? property.name : 'Bien non trouvé',
-          icon: Users,
-          action: () => {
-            if (onNavigateToSection) {
-              onNavigateToSection('tenants');
-            }
-            setShowSearchResults(false);
-            setSearchQuery('');
-          }
-        });
-      }
-    });
-
-    // Rechercher dans les sections de l'application
-    const sections = [
-      { name: 'Mes biens', section: 'properties', keywords: ['bien', 'propriété', 'immobilier'], icon: Building },
-      { name: 'Locataires', section: 'tenants', keywords: ['locataire', 'tenant'], icon: Users },
-      { name: 'Documents', section: 'documents', keywords: ['document', 'contrat', 'bail', 'quittance'], icon: FileText },
-      { name: 'Finances', section: 'finances', keywords: ['finance', 'argent', 'loyer', 'paiement'], icon: DollarSign },
-      { name: 'Tâches', section: 'tasks', keywords: ['tâche', 'todo', 'rappel'], icon: FileText },
-      { name: 'Automatisations', section: 'automations', keywords: ['automatisation', 'auto'], icon: FileText },
-      { name: 'Incidents', section: 'incidents', keywords: ['incident', 'problème', 'maintenance'], icon: FileText },
-      { name: 'Activités', section: 'activities', keywords: ['activité', 'historique', 'log'], icon: FileText },
-      { name: 'Paramètres', section: 'settings', keywords: ['paramètre', 'configuration', 'réglage'], icon: FileText },
-    ];
-
-    sections.forEach(section => {
-      if (
-        section.name.toLowerCase().includes(lowercaseQuery) ||
-        section.keywords.some(keyword => keyword.includes(lowercaseQuery))
-      ) {
-        results.push({
-          type: 'section',
-          id: section.section,
-          title: section.name,
-          subtitle: 'Section de l\'application',
-          icon: section.icon,
-          action: () => {
-            if (onNavigateToSection) {
-              onNavigateToSection(section.section);
-            }
-            setShowSearchResults(false);
-            setSearchQuery('');
-          }
-        });
-      }
-    });
-
-    setSearchResults(results.slice(0, 8)); // Limiter à 8 résultats
-    setShowSearchResults(results.length > 0);
-  };
-
-  const clearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setShowSearchResults(false);
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'property': return 'Bien';
-      case 'tenant': return 'Locataire';
-      case 'section': return 'Section';
-      default: return type;
+    try {
+      const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
+      this.isConnected = !error;
+      this.lastConnectionCheck = now;
+      return this.isConnected;
+    } catch (error) {
+      this.isConnected = false;
+      this.lastConnectionCheck = now;
+      return false;
     }
-  };
+  }
 
-  return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
-      <div className="flex items-center justify-between">
-        {/* Search */}
-        <div className="flex-1 max-w-lg">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
-              placeholder="Rechercher un bien, locataire, document..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            {searchQuery && (
-              <button
-                onClick={clearSearch}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-            
-            {/* Résultats de recherche */}
-            {showSearchResults && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 max-h-96 overflow-y-auto">
-                {searchResults.length > 0 ? (
-                  <>
-                    <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-100">
-                      Résultats de recherche
-                    </div>
-                    {searchResults.map((result, index) => {
-                      const Icon = result.icon;
-                      return (
-                        <button
-                          key={`${result.type}-${result.id}-${index}`}
-                          onClick={result.action}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
-                        >
-                          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Icon className="h-4 w-4 text-gray-600" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {result.title}
-                            </p>
-                            <p className="text-xs text-gray-500 truncate">
-                              {result.subtitle}
-                            </p>
-                          </div>
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-                            {getTypeLabel(result.type)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </>
-                ) : (
-                  <div className="px-4 py-8 text-center">
-                    <Search className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Aucun résultat trouvé</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Essayez avec d'autres mots-clés
-                    </p>
-                  </div>
-                )}
-                
-                {searchResults.length > 0 && (
-                  <div className="border-t border-gray-100 px-4 py-2">
-                    <p className="text-xs text-gray-500">
-                      {searchResults.length} résultat(s) trouvé(s)
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Overlay pour fermer la recherche */}
-        {showSearchResults && (
-          <div 
-            className="fixed inset-0 z-40" 
-            onClick={() => setShowSearchResults(false)}
-          ></div>
-        )}
+  getClient() {
+    return this.client;
+  }
 
-        {/* Right side */}
-        <div className="flex items-center space-x-4">
-          {/* Admin Button */}
-          {userIsAdmin && (
-            <button
-              onClick={() => setShowAdminMenu(true)}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              title="Administration"
-            >
-              <Shield className="h-6 w-6" />
-            </button>
-          )}
-          
-          <NotificationBell />
+  isReady(): boolean {
+    return this.isConfigured && this.isConnected;
+  }
 
-          {/* User Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <User className="h-5 w-5 text-white" />
-              </div>
-              <div className="text-left">
-                <div className="text-sm font-medium text-gray-900">
-                  {profile?.first_name} {profile?.last_name}
-                </div>
-                <div className="text-xs text-gray-500 capitalize">
-                  {profile?.plan && `Plan ${profile?.plan}`}
-                </div>
-              </div>
-              <ChevronDown className="h-4 w-4 text-gray-400" />
-            </button>
+  getConnectionStatus() {
+    return {
+      configured: this.isConfigured,
+      connected: this.isConnected,
+      attempts: this.connectionAttempts,
+    };
+  }
+}
 
-            {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                <button
-                  onClick={() => {
-                    if (onNavigateToSection) {
-                      onNavigateToSection('settings');
-                    }
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  Mon profil
-                </button>
-                <button
-                  onClick={() => {
-                    if (onNavigateToSection) {
-                      onNavigateToSection('settings');
-                    }
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  Paramètres
-                </button>
-                <button
-                  onClick={() => {
-                    if (onNavigateToSection) {
-                      onNavigateToSection('settings');
-                    }
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  Facturation
-                </button>
-                <hr className="my-2" />
-                <button
-                  onClick={handleSignOut}
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Se déconnecter
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+// Instance singleton de la connexion
+const supabaseConnection = new SupabaseConnection();
+export const supabase = supabaseConnection.getClient();
+
+// Fonctions utilitaires
+export const checkSupabaseConnection = () => supabaseConnection.checkConnection();
+export const isConnected = () => supabaseConnection.isReady();
+export const getConnectionStatus = () => supabaseConnection.getConnectionStatus();
+
+// Service d'authentification amélioré
+export const auth = {
+  // Inscription avec gestion d'erreur améliorée
+  async signUp(email: string, password: string, userData: {
+    firstName: string;
+    lastName: string;
+    companyName?: string;
+    phone?: string;
+  }) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.handleOfflineAuth('signup', email, userData);
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            company_name: userData.companyName,
+            phone: userData.phone
+          },
+        }
+      });
+
+      if (error) throw error;
+
+      // Log de l'activité si possible
+      try {
+        await activityService.addActivity({
+          type: 'system',
+          action: 'user_signup',
+          title: 'Nouveau compte créé',
+          description: `Compte créé pour ${userData.firstName} ${userData.lastName}`,
+          userId: data.user?.id || 'unknown',
+          priority: 'medium',
+          category: 'success'
+        });
+      } catch (activityError) {
+        console.warn('Impossible de logger l\'activité:', activityError);
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return this.handleAuthError(error, 'signup', email, userData);
+    }
+  },
+
+  // Connexion avec gestion d'erreur améliorée
+  async signIn(email: string, password: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.handleOfflineAuth('signin', email);
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      // Log de l'activité si possible
+      try {
+        await activityService.addActivity({
+          type: 'login',
+          action: 'user_signin',
+          title: 'Connexion utilisateur',
+          description: `Connexion réussie pour ${email}`,
+          userId: data.user?.id || 'unknown',
+          priority: 'low',
+          category: 'info'
+        });
+      } catch (activityError) {
+        console.warn('Impossible de logger l\'activité:', activityError);
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return this.handleAuthError(error, 'signin', email);
+    }
+  },
+
+  // Déconnexion
+  async signOut() {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return { error: null };
+      }
+
+      const { error } = await supabase.auth.signOut();
+      return { error: error ? { message: error.message } : null };
+    } catch (error) {
+      console.warn('Erreur lors de la déconnexion:', error);
+      return { error: null }; // Toujours permettre la déconnexion locale
+    }
+  },
+
+  // Récupérer la session actuelle
+  async getSession() {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.getDemoSession();
+      }
+
+      const { data, error } = await supabase.auth.getSession();
       
-      {/* Admin Menu Modal */}
-      {userIsAdmin && (
-        <AdminMenu 
-          isOpen={showAdminMenu} 
-          onClose={() => setShowAdminMenu(false)} 
-        />
-      )}
-    </header>
-  );
+      if (error) {
+        // Gérer les erreurs de session invalide
+        if (error.message.includes('User from sub claim in JWT does not exist') ||
+            error.message.includes('Invalid Refresh Token')) {
+          await supabase.auth.signOut();
+          return { data: { session: null }, error: null };
+        }
+        throw error;
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      console.warn('Erreur lors de la récupération de session:', error);
+      return this.getDemoSession();
+    }
+  },
+
+  // Récupérer le profil utilisateur
+  async getProfile(userId: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.getDemoProfile(userId);
+      }
+
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) throw sessionError;
+      
+      if (session?.session?.user.id === userId) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (error) throw error;
+        return { data, error: null };
+      }
+      
+      throw new Error('Utilisateur non trouvé');
+    } catch (error) {
+      console.warn('Erreur lors de la récupération du profil:', error);
+      return this.getDemoProfile(userId);
+    }
+  },
+
+  // Mettre à jour le profil
+  async updateProfile(userId: string, updates: Partial<AuthUser>) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - mise à jour du profil simulée');
+        return { data: { ...updates, id: userId }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  // Réinitialiser le mot de passe
+  async resetPassword(email: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - réinitialisation simulée');
+        return { data: {}, error: null };
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      return { data: {}, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  // Gestion de l'authentification hors ligne
+  handleOfflineAuth(operation: string, email: string, userData?: any) {
+    console.warn(`Mode hors ligne activé pour ${operation}`);
+    
+    const mockUser = {
+      id: 'demo-user-id',
+      email,
+      user_metadata: userData ? {
+        first_name: userData.firstName,
+        last_name: userData.lastName,
+        company_name: userData.companyName,
+        phone: userData.phone
+      } : {
+        first_name: 'Demo',
+        last_name: 'User'
+      }
+    };
+
+    return {
+      data: {
+        user: mockUser,
+        session: {
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh-token',
+          expires_at: Date.now() + 3600000
+        }
+      },
+      error: null
+    };
+  },
+
+  // Gestion des erreurs d'authentification
+  handleAuthError(error: any, operation: string, email?: string, userData?: any) {
+    const errorMessage = (error as Error).message;
+    
+    // Erreurs réseau - basculer en mode démo
+    if (errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('AbortError')) {
+      console.warn(`Erreur réseau lors de ${operation} - Mode démo activé`);
+      return this.handleOfflineAuth(operation, email || 'demo@example.com', userData);
+    }
+
+    // Autres erreurs - retourner l'erreur réelle
+    return {
+      data: { user: null, session: null },
+      error: { message: this.translateError(errorMessage) }
+    };
+  },
+
+  // Session démo
+  getDemoSession() {
+    return {
+      data: {
+        session: {
+          user: {
+            id: 'demo-user-id',
+            email: 'demo@example.com',
+            user_metadata: {
+              first_name: 'Demo',
+              last_name: 'User'
+            }
+          },
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh-token',
+          expires_at: Date.now() + 3600000
+        }
+      },
+      error: null
+    };
+  },
+
+  // Profil démo
+  getDemoProfile(userId: string) {
+    return {
+      data: {
+        id: userId,
+        email: 'demo@example.com',
+        first_name: 'Demo',
+        last_name: 'User',
+        company_name: 'Demo Company',
+        phone: '0123456789',
+        plan: 'starter',
+        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        subscription_status: 'trial',
+        role: 'user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      error: null
+    };
+  },
+
+  // Traduction des erreurs
+  translateError(message: string): string {
+    const translations: Record<string, string> = {
+      'Invalid login credentials': 'Email ou mot de passe incorrect',
+      'Email not confirmed': 'Veuillez confirmer votre email avant de vous connecter',
+      'Too many requests': 'Trop de tentatives. Veuillez réessayer dans quelques minutes',
+      'User already registered': 'Un compte avec cette adresse email existe déjà',
+      'Password should be at least': 'Le mot de passe doit contenir au moins 6 caractères',
+      'Invalid email': 'Format d\'email invalide'
+    };
+
+    for (const [key, value] of Object.entries(translations)) {
+      if (message.includes(key)) {
+        return value;
+      }
+    }
+
+    return message;
+  }
 };
 
-export default TopBar;
+// Fonctions pour la gestion des abonnements
+export const subscription = {
+  async updatePlan(userId: string, plan: 'starter' | 'professional' | 'expert') {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - mise à jour du plan simulée');
+        return { data: { plan }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          plan,
+          subscription_status: 'active'
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  async extendTrial(userId: string, days: number = 14) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - extension d\'essai simulée');
+        return { data: { trial_ends_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }, error: null };
+      }
+
+      const newTrialEnd = new Date();
+      newTrialEnd.setDate(newTrialEnd.getDate() + days);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          trial_ends_at: newTrialEnd.toISOString()
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  async cancelSubscription(userId: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - annulation simulée');
+        return { data: { subscription_status: 'cancelled' }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          subscription_status: 'cancelled'
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  }
+};
+
+// Fonction pour surveiller l'état de la connexion
+export const startConnectionMonitoring = () => {
+  setInterval(async () => {
+    const status = getConnectionStatus();
+    if (!status.connected && status.configured) {
+      console.log('Vérification de la reconnexion Supabase...');
+      await checkSupabaseConnection();
+    }
+  }, 60000); // Vérifier toutes les minutes
+};
+
+// Démarrer la surveillance automatiquement
+if (typeof window !== 'undefined') {
+  startConnectionMonitoring();
+}
