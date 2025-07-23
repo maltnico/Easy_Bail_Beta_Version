@@ -634,6 +634,7 @@ export const defaultEmailTemplates: Omit<EmailTemplate, 'id' | 'createdAt' | 'up
   {
     name: "Fin de bail - Informations",
     subject: "Informations concernant la fin de votre bail",
+    type: "html",
     category: "tenant",
     documentTemplateId: undefined,
     content: `<!DOCTYPE html>

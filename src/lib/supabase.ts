@@ -283,6 +283,15 @@ export const auth = {
       
       if (error) throw error;
       
+      // Ensure user profile exists after successful signin
+      if (data?.user) {
+        try {
+          await ensureUserProfile(data.user.id);
+        } catch (profileError) {
+          console.warn('Could not create user profile:', profileError);
+        }
+      }
+      
       return { data, error: null };
     } catch (error) {
       const errorMessage = (error as Error).message;

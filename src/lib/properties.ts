@@ -484,7 +484,16 @@ export const tenantsApi = {
       }
       
       // Ensure user profile exists before creating tenant
-      await ensureUserProfile(userData.user.id);
+      // Profile should already exist from auth process, but check anyway
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userData.user.id)
+        .maybeSingle();
+      
+      if (checkError || !existingProfile) {
+        throw new Error('Profil utilisateur non trouvé. Veuillez vous reconnecter.');
+      }
       
       // Convertir les données pour Supabase
       const tenantInsert = {
