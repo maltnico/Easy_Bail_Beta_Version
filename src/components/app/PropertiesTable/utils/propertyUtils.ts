@@ -76,3 +76,14 @@ export const getStatusBg = (status: string): string => {
   };
   return bgMap[status as keyof typeof bgMap] || 'bg-gray-50';
 };
+
+export const getStatusLabel = (status: string): string => {
+  const labelMap = {
+    occupied: 'Occupé',
+    vacant: 'Vacant',
+    maintenance: 'En maintenance',
+    renovation: 'En rénovation',
+    sold: 'Vendu',
+  };
+  return labelMap[status as keyof typeof labelMap] || status;
+};
