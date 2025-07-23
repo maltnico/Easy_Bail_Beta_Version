@@ -193,18 +193,36 @@ const DocumentGenerator = () => {
       // Créer un élément temporaire avec le contenu du document
       const tempDiv = window.document.createElement('div');
       tempDiv.innerHTML = generatedDoc.content;
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.top = '0';
-      tempDiv.style.width = '210mm'; // A4 width
-      tempDiv.style.padding = '20mm';
-      tempDiv.style.fontFamily = 'Arial, sans-serif';
-      tempDiv.style.fontSize = '12pt';
-      tempDiv.style.lineHeight = '1.4';
-      tempDiv.style.color = '#000';
-      tempDiv.style.backgroundColor = '#fff';
+      
+      // Styles d'isolation complète pour éviter d'affecter le layout global
+      tempDiv.style.cssText = `
+        position: fixed !important;
+        top: -99999px !important;
+        left: -99999px !important;
+        width: 794px !important;
+        height: 1123px !important;
+        padding: 76px !important;
+        margin: 0 !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        transform: none !important;
+        font-family: 'Times New Roman', serif !important;
+        font-size: 12pt !important;
+        line-height: 1.4 !important;
+        color: #000 !important;
+        background-color: #fff !important;
+        overflow: hidden !important;
+        z-index: -9999 !important;
+        pointer-events: none !important;
+        user-select: none !important;
+        opacity: 0 !important;
+      `;
       
       window.document.body.appendChild(tempDiv);
+      
+      // Attendre que le DOM soit mis à jour
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Convertir en canvas
       const canvas = await html2canvas(tempDiv, {
@@ -212,8 +230,10 @@ const DocumentGenerator = () => {
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        width: 794, // A4 width in pixels at 96 DPI
-        height: 1123 // A4 height in pixels at 96 DPI
+        width: 794,
+        height: 1123,
+        logging: false, // Désactiver les logs pour éviter le spam
+        removeContainer: true // Nettoyer automatiquement le conteneur
       });
       
       // Créer le PDF
@@ -223,13 +243,9 @@ const DocumentGenerator = () => {
       // Calculer les dimensions pour s'adapter à la page A4
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 0;
       
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      // Ajuster l'image au format A4
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       
       // Convertir le PDF en base64
       const pdfData = pdf.output('datauristring');
@@ -237,10 +253,15 @@ const DocumentGenerator = () => {
       // Stocker le PDF dans le document
       generatedDoc.metadata.pdfData = pdfData;
       
-      // Nettoyer
-      window.document.body.removeChild(tempDiv);
+      // Nettoyer immédiatement
+      if (tempDiv.parentNode) {
+        window.document.body.removeChild(tempDiv);
+      }
     } catch (error) {
       console.error('Erreur lors de la génération PDF:', error);
+      // S'assurer que l'élément temporaire est supprimé même en cas d'erreur
+      const tempElements = window.document.querySelectorAll('[style*="position: fixed"][style*="-99999px"]');
+      tempElements.forEach(el => el.remove());
     }
   };
 
@@ -262,18 +283,36 @@ const DocumentGenerator = () => {
       // Créer un élément temporaire avec le contenu du document
       const tempDiv = window.document.createElement('div');
       tempDiv.innerHTML = generatedDocToDownload.content;
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.top = '0';
-      tempDiv.style.width = '210mm'; // A4 width
-      tempDiv.style.padding = '20mm';
-      tempDiv.style.fontFamily = 'Arial, sans-serif';
-      tempDiv.style.fontSize = '12pt';
-      tempDiv.style.lineHeight = '1.4';
-      tempDiv.style.color = '#000';
-      tempDiv.style.backgroundColor = '#fff';
+      
+      // Styles d'isolation complète pour éviter d'affecter le layout global
+      tempDiv.style.cssText = `
+        position: fixed !important;
+        top: -99999px !important;
+        left: -99999px !important;
+        width: 794px !important;
+        height: 1123px !important;
+        padding: 76px !important;
+        margin: 0 !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        transform: none !important;
+        font-family: 'Times New Roman', serif !important;
+        font-size: 12pt !important;
+        line-height: 1.4 !important;
+        color: #000 !important;
+        background-color: #fff !important;
+        overflow: hidden !important;
+        z-index: -9999 !important;
+        pointer-events: none !important;
+        user-select: none !important;
+        opacity: 0 !important;
+      `;
       
       window.document.body.appendChild(tempDiv);
+      
+      // Attendre que le DOM soit mis à jour
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Convertir en canvas
       const canvas = await html2canvas(tempDiv, {
@@ -281,8 +320,10 @@ const DocumentGenerator = () => {
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        width: 794, // A4 width in pixels at 96 DPI
-        height: 1123 // A4 height in pixels at 96 DPI
+        width: 794,
+        height: 1123,
+        logging: false,
+        removeContainer: true
       });
       
       // Créer le PDF
@@ -292,21 +333,22 @@ const DocumentGenerator = () => {
       // Calculer les dimensions pour s'adapter à la page A4
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 0;
       
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      // Ajuster l'image au format A4
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       
       // Télécharger le PDF
       pdf.save(`${generatedDocToDownload.name}.pdf`);
       
-      // Nettoyer
-      window.document.body.removeChild(tempDiv);
+      // Nettoyer immédiatement
+      if (tempDiv.parentNode) {
+        window.document.body.removeChild(tempDiv);
+      }
     } catch (error) {
       console.error('Erreur lors de la génération PDF:', error);
+      // S'assurer que l'élément temporaire est supprimé même en cas d'erreur
+      const tempElements = window.document.querySelectorAll('[style*="position: fixed"][style*="-99999px"]');
+      tempElements.forEach(el => el.remove());
       alert('Erreur lors de la génération du PDF');
     }
   };
@@ -589,40 +631,59 @@ const DocumentGenerator = () => {
         // Générer le PDF à partir du contenu HTML
         const tempDiv = window.document.createElement('div');
         tempDiv.innerHTML = generatedDoc.content;
-        tempDiv.style.position = 'absolute';
-        tempDiv.style.left = '-9999px';
-        tempDiv.style.top = '0';
-        tempDiv.style.width = '210mm';
-        tempDiv.style.padding = '20mm';
-        tempDiv.style.fontFamily = 'Arial, sans-serif';
-        tempDiv.style.fontSize = '12pt';
-        tempDiv.style.lineHeight = '1.4';
-        tempDiv.style.color = '#000';
-        tempDiv.style.backgroundColor = '#fff';
+        
+        // Styles d'isolation complète
+        tempDiv.style.cssText = `
+          position: fixed !important;
+          top: -99999px !important;
+          left: -99999px !important;
+          width: 794px !important;
+          height: 1123px !important;
+          padding: 76px !important;
+          margin: 0 !important;
+          border: none !important;
+          outline: none !important;
+          box-shadow: none !important;
+          transform: none !important;
+          font-family: 'Times New Roman', serif !important;
+          font-size: 12pt !important;
+          line-height: 1.4 !important;
+          color: #000 !important;
+          background-color: #fff !important;
+          overflow: hidden !important;
+          z-index: -9999 !important;
+          pointer-events: none !important;
+          user-select: none !important;
+          opacity: 0 !important;
+        `;
         
         window.document.body.appendChild(tempDiv);
+        
+        // Attendre que le DOM soit mis à jour
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         const canvas = await html2canvas(tempDiv, {
           scale: 2,
           useCORS: true,
           allowTaint: true,
-          backgroundColor: '#ffffff'
+          backgroundColor: '#ffffff',
+          logging: false,
+          removeContainer: true
         });
         
         const pdf = new jsPDF('p', 'mm', 'a4');
         const imgData = canvas.toDataURL('image/png');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
-        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-        const imgX = (pdfWidth - imgWidth * ratio) / 2;
-        const imgY = 0;
         
-        pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
         
         pdfBlob = pdf.output('blob');
-        window.document.body.removeChild(tempDiv);
+        
+        // Nettoyer immédiatement
+        if (tempDiv.parentNode) {
+          window.document.body.removeChild(tempDiv);
+        }
       }
       
       if (pdfBlob) {
