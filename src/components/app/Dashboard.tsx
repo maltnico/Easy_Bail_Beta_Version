@@ -1,613 +1,589 @@
-import React, { useState } from 'react';
-import { 
-  Building, 
-  Users, 
-  FileText,
-  CheckSquare,
-  DollarSign, 
-  TrendingUp, 
-  TrendingDown,
-  AlertTriangle,
-  Calendar,
-  CheckCircle,
-  Activity,
-  Clock,
-  Eye,
-  BarChart3,
-  PieChart,
-  Zap,
-  Filter,
-  Mail,
-  RefreshCw
-} from 'lucide-react';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
-import { useActivities } from '../../hooks/useActivities';
-import { useProperties } from '../../hooks/useProperties';
-import { useNotifications } from '../../hooks/useNotifications';
-import { useFinances } from '../../hooks/useFinances';
-import { useTasks } from '../../hooks/useTasks';
-import { useAutomations } from '../../hooks/useAutomations';
-import { documentStorage } from '../../lib/documentStorage';
-import RecentDocumentsWidget from './RecentDocumentsWidget';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../types/database';
+import { activityService } from './activityService';
 
-// Enregistrer les composants Chart.js nécessaires
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
-
-const Dashboard = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) => {
-  const { activities, stats, refreshActivities, loading: activitiesLoading } = useActivities({}, 7); // Récupérer les 7 dernières activités
-  const { properties, loading: propertiesLoading } = useProperties();
-  const { notifications, unreadCount } = useNotifications();
-  const { tasks, loading: tasksLoading } = useTasks();
-  const { flows, dashboardData, stats: financeStats, loading: financeLoading, refreshDashboard } = useFinances();
-  const { automations, isSchedulerActive, startScheduler, stopScheduler } = useAutomations();
-  const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'quarter' | 'semester' | 'year'>('month');
-  const [generatedDocuments, setGeneratedDocuments] = useState(0);
-  const [documentsLoading, setDocumentsLoading] = useState(true);
-  
-  // Charger le nombre de documents générés
-  React.useEffect(() => {
-    const loadGeneratedDocuments = async () => {
-      try {
-        setDocumentsLoading(true);
-        const documents = await documentStorage.getDocumentsList();
-        setGeneratedDocuments(documents.length);
-      } catch (error) {
-        console.error('Erreur lors du chargement des documents:', error);
-        // En cas d'erreur, utiliser des données de démonstration
-        setGeneratedDocuments(3);
-      } finally {
-        setDocumentsLoading(false);
-      }
-    };
-    
-    loadGeneratedDocuments();
-  }, []);
-
-  const totalProperties = properties.length;
-  const occupiedProperties = properties.filter(p => p.status === 'occupied').length;
-  const totalRent = properties.reduce((sum, p) => p.status === 'occupied' ? sum + p.rent : sum, 0);
-  const activeAutomations = automations.filter(a => a.active).length;
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'document':
-        return FileText;
-      case 'payment':
-        return DollarSign;
-      case 'property':
-        return Building;
-      case 'tenant':
-        return Users;
-      case 'automation':
-        return Activity;
-      case 'incident':
-        return AlertTriangle;
-      default:
-        return Activity;
-    }
-  };
-
-  const getActivityColor = (category: string) => {
-    switch (category) {
-      case 'success':
-        return 'text-green-600';
-      case 'warning':
-        return 'text-yellow-600';
-      case 'error':
-        return 'text-red-600';
-      default:
-        return 'text-blue-600';
-    }
-  };
-
-  const handlePeriodChange = (period: string) => {
-    setSelectedPeriod(period as 'month' | 'quarter' | 'semester' | 'year');
-    
-    const now = new Date();
-    let startDate: Date;
-    let endDate: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    
-    switch (period) {
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-        break;
-      case 'quarter':
-        const currentQuarter = Math.floor(now.getMonth() / 3);
-        startDate = new Date(now.getFullYear(), currentQuarter * 3, 1);
-        endDate = new Date(now.getFullYear(), (currentQuarter + 1) * 3, 0, 23, 59, 59);
-        break;
-      case 'semester':
-        const currentSemester = Math.floor(now.getMonth() / 6);
-        startDate = new Date(now.getFullYear(), currentSemester * 6, 1);
-        endDate = new Date(now.getFullYear(), (currentSemester + 1) * 6, 0, 23, 59, 59);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-        break;
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-    }
-    
-    refreshDashboard(startDate, endDate);
-  };
-
-  const formatTimeAgo = (date: Date) => {
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'maintenant';
-    if (diffInMinutes < 60) return `${diffInMinutes}min`;
-    
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}h`;
-    
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays}j`;
-  };
-
-  // Filtrer les tâches à venir (non terminées, triées par date d'échéance)
-  const upcomingTasks = tasks
-    .filter(task => task.status === 'pending')
-    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
-    .slice(0, 3); // Limiter à 3 tâches
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Tableau de bord</h1>
-        <p className="text-gray-600">Vue d'ensemble de votre portefeuille immobilier</p>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Biens totaux</p>
-              <p className="text-3xl font-bold text-gray-900">{totalProperties}</p>
-              <p className="text-sm text-green-600 mt-1">
-                {occupiedProperties} occupés
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Building className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Revenus mensuels</p>
-              <p className="text-3xl font-bold text-gray-900">{totalRent.toLocaleString()}€</p>
-              <p className="text-sm text-green-600 mt-1">
-                +5.2% vs mois dernier
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Documents générés</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {documentsLoading ? '...' : generatedDocuments}
-              </p>
-              <p className="text-sm text-orange-600 mt-1">
-                Via le générateur
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <FileText className="h-6 w-6 text-orange-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Automatisations actives</p>
-              <p className="text-3xl font-bold text-gray-900">{activeAutomations}</p>
-              <p className="text-sm text-red-600 mt-1">
-                {activeAutomations > 0 ? 'En fonctionnement' : 'Aucune automatisation'}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Zap className="h-6 w-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
-        
-      </div>
-      
-      {/* Loading State */}
-      {propertiesLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <span className="ml-3 text-gray-600">Chargement des données...</span>
-        </div>
-      )}
-      
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Financial Overview Widget */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-2">
-              <h3 className="text-lg font-semibold text-gray-900">Aperçu financier</h3>
-              <span className="text-sm text-gray-500">
-                ({selectedPeriod === 'month' ? 'Mensuel' : 
-                  selectedPeriod === 'quarter' ? 'Trimestriel' : 
-                  selectedPeriod === 'semester' ? 'Semestriel' : 'Annuel'})
-              </span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <select 
-                value={selectedPeriod}
-                onChange={(e) => handlePeriodChange(e.target.value as 'month' | 'quarter' | 'semester' | 'year')}
-                className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="month">Ce mois</option>
-                <option value="quarter">Ce trimestre</option>
-                <option value="semester">Ce semestre</option>
-                <option value="year">Cette année</option>
-              </select>
-              <Calendar className="h-5 w-5 text-gray-400" />
-            </div>
-          </div>
-          
-          {financeLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              <span className="ml-3 text-gray-600">Chargement des données financières...</span>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-green-600">
-                        Revenus {selectedPeriod === 'month' ? 'mensuels' : 
-                                selectedPeriod === 'quarter' ? 'trimestriels' : 
-                                selectedPeriod === 'semester' ? 'semestriels' : 'annuels'}
-                      </p>
-                      <p className="text-xl font-bold text-green-900 whitespace-nowrap">
-                        {dashboardData?.totalIncome.toLocaleString('fr-FR')} €
-                      </p>
-                    </div>
-                    <TrendingUp className="h-6 w-6 text-green-600" />
-                  </div>
-                </div>
-                
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-red-600">
-                        Dépenses {selectedPeriod === 'month' ? 'mensuelles' : 
-                                selectedPeriod === 'quarter' ? 'trimestrielles' : 
-                                selectedPeriod === 'semester' ? 'semestrielles' : 'annuelles'}
-                      </p>
-                      <p className="text-xl font-bold text-red-900 whitespace-nowrap">
-                        {dashboardData?.totalExpense.toLocaleString('fr-FR')} €
-                      </p>
-                    </div>
-                    <TrendingDown className="h-6 w-6 text-red-600" />
-                  </div>
-                </div>
-                
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-blue-600">
-                        Résultat {selectedPeriod === 'month' ? 'mensuel' : 
-                                selectedPeriod === 'quarter' ? 'trimestriel' : 
-                                selectedPeriod === 'semester' ? 'semestriel' : 'annuel'}
-                      </p>
-                      <p className="text-xl font-bold text-blue-900 whitespace-nowrap">
-                        {(dashboardData?.netIncome || 0).toLocaleString('fr-FR')} €
-                      </p>
-                    </div>
-                    <DollarSign className="h-6 w-6 text-blue-600" />
-                  </div>
-                </div>
-              </div>
-              
-              {/* Graphique à barres */}
-              <div className="mb-4 bg-white p-4 rounded-lg border border-gray-200">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">
-                  Performance financière de mes biens
-                </h4>
-                <div className="h-64">
-                  {dashboardData?.monthlyTrend && dashboardData.monthlyTrend.length > 0 ? (
-                    <Bar
-                      data={{
-                        labels: dashboardData.monthlyTrend.map(item => item.month),
-                        datasets: [
-                          {
-                            label: 'Revenus',
-                            data: dashboardData.monthlyTrend.map(item => item.income),
-                            backgroundColor: 'rgba(34, 197, 94, 0.7)',
-                            borderColor: 'rgba(34, 197, 94, 1)',
-                            borderWidth: 1,
-                            borderRadius: 4,
-                          },
-                          {
-                            label: 'Dépenses',
-                            data: dashboardData.monthlyTrend.map(item => item.expense),
-                            backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                            borderColor: 'rgba(239, 68, 68, 1)',
-                            borderWidth: 1,
-                            borderRadius: 4,
-                          },
-                          {
-                            label: 'Résultat net',
-                            data: dashboardData.monthlyTrend.map(item => item.income - item.expense),
-                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                            borderColor: 'rgba(59, 130, 246, 1)',
-                            borderWidth: 1,
-                            borderRadius: 4,
-                          }
-                        ],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: {
-                            position: 'bottom',
-                          },
-                          tooltip: {
-                            callbacks: {
-                              label: function(context) {
-                                const value = context.raw as number;
-                                return `${context.dataset.label}: ${value.toLocaleString('fr-FR')} €`;
-                              }
-                            }
-                          }
-                        },
-                        scales: {
-                          x: {
-                            grid: {
-                              display: false
-                            }
-                          },
-                          y: {
-                            beginAtZero: true,
-                            ticks: {
-                              callback: function(value) {
-                                return `${value} €`;
-                              }
-                            }
-                          }
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center">
-                        <BarChart3 className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                        <p className="text-sm text-gray-500">Aucune donnée disponible</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="pt-4 border-t border-gray-200">
-                <button 
-                  onClick={() => setActiveTab('finances')}
-                  className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center justify-end"
-                >
-                  Voir toutes les finances
-                  <svg className="h-4 w-4 ml-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                    <polyline points="12 5 19 12 12 19"></polyline>
-                  </svg>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Recent Activities - Kept */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Activités récentes</h3>
-            <button 
-              onClick={refreshActivities}
-              disabled={activitiesLoading}
-              className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Rafraîchir les activités"
-            >
-              <RefreshCw className={`h-4 w-4 ${activitiesLoading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-          <div className="space-y-4">
-            {activitiesLoading && (
-              <div className="flex justify-center py-2">
-                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
-            {activities.map((activity) => {
-              const Icon = getActivityIcon(activity.type);
-              return (
-                <div key={activity.id} className="flex items-start space-x-6 py-2">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100">
-                    <Icon className={`h-4 w-4 ${getActivityColor(activity.category)}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{activity.title}</p>
-                    <p className="text-xs text-gray-500 line-clamp-2">{activity.description}</p>
-                    {!activity.readAt && (
-                      <div className="flex items-center mt-1">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
-                        <span className="text-xs text-blue-600">Non lu</span>
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{formatTimeAgo(activity.createdAt)}</span>
-                </div>
-              );
-            })}
-            {activities.length === 0 && (
-              <div className="text-center py-6">
-                <Activity className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Aucune activité récente</p>
-              </div>
-            )}
-          </div>
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">{stats.unread} non lues</span>
-              <button 
-                onClick={() => setActiveTab('activities')}
-                className="text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Voir toutes les activités
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Documents and Tasks Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Documents Widget */}
-        <RecentDocumentsWidget setActiveTab={setActiveTab} />
-
-        {/* Upcoming Tasks */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Tâches à venir</h3>
-            {tasksLoading ? (
-              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <Calendar className="h-5 w-5 text-gray-400" />
-            )}
-          </div>
-          
-          {tasksLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="text-center">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-600">Chargement des tâches...</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {upcomingTasks.length > 0 ? (
-                upcomingTasks.map((task) => (
-                  <div key={task.id} className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      task.priority === 'high' ? 'bg-red-100' : 
-                      task.priority === 'medium' ? 'bg-yellow-100' : 'bg-green-100'
-                    }`}>
-                      <CheckSquare className={`h-5 w-5 ${
-                        task.priority === 'high' ? 'text-red-600' : 
-                        task.priority === 'medium' ? 'text-yellow-600' : 'text-green-600'
-                      }`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-gray-900">{task.title}</p>
-                        <span className="text-sm text-gray-500">{task.dueDate.toLocaleDateString()}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">{task.propertyName || 'Aucun bien associé'}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8">
-                  <CheckSquare className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-                  <p className="text-gray-500">Aucune tâche à venir</p>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <button 
-              onClick={() => setActiveTab('tasks')}
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center justify-end"
-            >
-              Voir toutes les tâches
-              <svg className="h-4 w-4 ml-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-                <polyline points="12 5 19 12 12 19"></polyline>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions rapides</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <button 
-              onClick={() => setActiveTab('properties')}
-              className="flex flex-col items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              <Building className="h-8 w-8 text-blue-600 mb-2" />
-              <span className="text-sm font-medium text-blue-900">Ajouter un bien</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('tenants')}
-              className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-            >
-              <Users className="h-8 w-8 text-green-600 mb-2" />
-              <span className="text-sm font-medium text-green-900">Nouveau locataire</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('documents')}
-              className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
-            >
-              <FileText className="h-8 w-8 text-purple-600 mb-2" />
-              <span className="text-sm font-medium text-purple-900">Créer document</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('finances')}
-              className="flex flex-col items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
-            >
-              <DollarSign className="h-8 w-8 text-orange-600 mb-2" />
-              <span className="text-sm font-medium text-orange-900">Ajouter flux</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('properties')}
-              className="flex flex-col items-center p-4 bg-teal-50 rounded-lg hover:bg-teal-100 transition-colors"
-            >
-              <Calendar className="h-8 w-8 text-teal-600 mb-2" />
-              <span className="text-sm font-medium text-teal-900">Planifier visite</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('documents')}
-              className="flex flex-col items-center p-4 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
-            >
-              <CheckCircle className="h-8 w-8 text-indigo-600 mb-2" />
-              <span className="text-sm font-medium text-indigo-900">État des lieux</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+// Types pour l'authentification
+export type AuthUser = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  company_name?: string;
+  phone?: string;
+  plan: 'starter' | 'professional' | 'expert';
+  trial_ends_at: string;
+  subscription_status: 'trial' | 'active' | 'cancelled' | 'expired';
+  role?: 'user' | 'admin' | 'manager';
+  avatar_url?: string;
+  created_at: string;
+  updated_at: string;
 };
 
-export default Dashboard;
+// Configuration et état de la connexion
+class SupabaseConnection {
+  private client: any = null;
+  private isConfigured = false;
+  private isConnected = false;
+  private connectionAttempts = 0;
+  private maxRetries = 3;
+  private retryDelay = 2000;
+  private lastConnectionCheck = 0;
+  private connectionCheckInterval = 30000; // 30 secondes
+
+  constructor() {
+    this.initialize();
+  }
+
+  private initialize() {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+    // Validation des variables d'environnement
+    this.isConfigured = this.validateConfig(supabaseUrl, supabaseAnonKey);
+
+    if (this.isConfigured) {
+      this.createClient(supabaseUrl, supabaseAnonKey);
+    } else {
+      console.warn('Configuration Supabase invalide - Mode démo activé');
+    }
+  }
+
+  private validateConfig(url: string, key: string): boolean {
+    if (!url || !key) {
+      console.warn('Variables d\'environnement Supabase manquantes');
+      return false;
+    }
+
+    if (url.includes('your-project-id') || key.includes('your-anon-key')) {
+      console.warn('Variables d\'environnement Supabase contiennent des valeurs par défaut');
+      return false;
+    }
+
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      console.warn('URL Supabase invalide');
+      return false;
+    }
+  }
+
+  private createClient(url: string, key: string) {
+    this.client = createClient<Database>(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+      global: {
+        fetch: this.createFetchWrapper(),
+      },
+    });
+  }
+
+  private createFetchWrapper() {
+    return async (url: string, options: any = {}) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        
+        // Marquer comme connecté si la requête réussit
+        if (response.ok) {
+          this.isConnected = true;
+          this.connectionAttempts = 0;
+        }
+
+        return response;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        this.handleConnectionError(error);
+        throw error;
+      }
+    };
+  }
+
+  private handleConnectionError(error: any) {
+    const isNetworkError = 
+      error.name === 'AbortError' ||
+      error.name === 'TimeoutError' ||
+      error.message?.includes('Failed to fetch') ||
+      error.message?.includes('NetworkError') ||
+      error.message?.includes('timeout');
+
+    if (isNetworkError) {
+      this.isConnected = false;
+      this.connectionAttempts++;
+      
+      if (this.connectionAttempts <= this.maxRetries) {
+        console.warn(`Tentative de reconnexion ${this.connectionAttempts}/${this.maxRetries}`);
+        setTimeout(() => this.attemptReconnection(), this.retryDelay * this.connectionAttempts);
+      } else {
+        console.warn('Nombre maximum de tentatives de reconnexion atteint');
+      }
+    }
+  }
+
+  private async attemptReconnection() {
+    try {
+      const connected = await this.checkConnection();
+      if (connected) {
+        console.log('Reconnexion Supabase réussie');
+        this.isConnected = true;
+        this.connectionAttempts = 0;
+      }
+    } catch (error) {
+      console.warn('Échec de la reconnexion:', error);
+    }
+  }
+
+  async checkConnection(): Promise<boolean> {
+    if (!this.isConfigured || !this.client) return false;
+
+    const now = Date.now();
+    if (now - this.lastConnectionCheck < this.connectionCheckInterval) {
+      return this.isConnected;
+    }
+
+    try {
+      const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
+      this.isConnected = !error;
+      this.lastConnectionCheck = now;
+      return this.isConnected;
+    } catch (error) {
+      this.isConnected = false;
+      this.lastConnectionCheck = now;
+      return false;
+    }
+  }
+
+  getClient() {
+    return this.client;
+  }
+
+  isReady(): boolean {
+    return this.isConfigured && this.isConnected;
+  }
+
+  getConnectionStatus() {
+    return {
+      configured: this.isConfigured,
+      connected: this.isConnected,
+      attempts: this.connectionAttempts,
+    };
+  }
+}
+
+// Instance singleton de la connexion
+const supabaseConnection = new SupabaseConnection();
+export const supabase = supabaseConnection.getClient();
+
+// Fonctions utilitaires
+export const checkSupabaseConnection = () => supabaseConnection.checkConnection();
+export const isConnected = () => supabaseConnection.isReady();
+export const getConnectionStatus = () => supabaseConnection.getConnectionStatus();
+
+// Service d'authentification amélioré
+export const auth = {
+  // Inscription avec gestion d'erreur améliorée
+  async signUp(email: string, password: string, userData: {
+    firstName: string;
+    lastName: string;
+    companyName?: string;
+    phone?: string;
+  }) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.handleOfflineAuth('signup', email, userData);
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            company_name: userData.companyName,
+            phone: userData.phone
+          },
+        }
+      });
+
+      if (error) throw error;
+
+      // Log de l'activité si possible
+      try {
+        await activityService.addActivity({
+          type: 'system',
+          action: 'user_signup',
+          title: 'Nouveau compte créé',
+          description: `Compte créé pour ${userData.firstName} ${userData.lastName}`,
+          userId: data.user?.id || 'unknown',
+          priority: 'medium',
+          category: 'success'
+        });
+      } catch (activityError) {
+        console.warn('Impossible de logger l\'activité:', activityError);
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return this.handleAuthError(error, 'signup', email, userData);
+    }
+  },
+
+  // Connexion avec gestion d'erreur améliorée
+  async signIn(email: string, password: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.handleOfflineAuth('signin', email);
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      // Log de l'activité si possible
+      try {
+        await activityService.addActivity({
+          type: 'login',
+          action: 'user_signin',
+          title: 'Connexion utilisateur',
+          description: `Connexion réussie pour ${email}`,
+          userId: data.user?.id || 'unknown',
+          priority: 'low',
+          category: 'info'
+        });
+      } catch (activityError) {
+        console.warn('Impossible de logger l\'activité:', activityError);
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return this.handleAuthError(error, 'signin', email);
+    }
+  },
+
+  // Déconnexion
+  async signOut() {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return { error: null };
+      }
+
+      const { error } = await supabase.auth.signOut();
+      return { error: error ? { message: error.message } : null };
+    } catch (error) {
+      console.warn('Erreur lors de la déconnexion:', error);
+      return { error: null }; // Toujours permettre la déconnexion locale
+    }
+  },
+
+  // Récupérer la session actuelle
+  async getSession() {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.getDemoSession();
+      }
+
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        // Gérer les erreurs de session invalide
+        if (error.message.includes('User from sub claim in JWT does not exist') ||
+            error.message.includes('Invalid Refresh Token')) {
+          await supabase.auth.signOut();
+          return { data: { session: null }, error: null };
+        }
+        throw error;
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      console.warn('Erreur lors de la récupération de session:', error);
+      return this.getDemoSession();
+    }
+  },
+
+  // Récupérer le profil utilisateur
+  async getProfile(userId: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.getDemoProfile(userId);
+      }
+
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) throw sessionError;
+      
+      if (session?.session?.user.id === userId) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (error) throw error;
+        return { data, error: null };
+      }
+      
+      throw new Error('Utilisateur non trouvé');
+    } catch (error) {
+      console.warn('Erreur lors de la récupération du profil:', error);
+      return this.getDemoProfile(userId);
+    }
+  },
+
+  // Mettre à jour le profil
+  async updateProfile(userId: string, updates: Partial<AuthUser>) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - mise à jour du profil simulée');
+        return { data: { ...updates, id: userId }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  // Réinitialiser le mot de passe
+  async resetPassword(email: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - réinitialisation simulée');
+        return { data: {}, error: null };
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      return { data: {}, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  // Gestion de l'authentification hors ligne
+  handleOfflineAuth(operation: string, email: string, userData?: any) {
+    console.warn(`Mode hors ligne activé pour ${operation}`);
+    
+    const mockUser = {
+      id: 'demo-user-id',
+      email,
+      user_metadata: userData ? {
+        first_name: userData.firstName,
+        last_name: userData.lastName,
+        company_name: userData.companyName,
+        phone: userData.phone
+      } : {
+        first_name: 'Demo',
+        last_name: 'User'
+      }
+    };
+
+    return {
+      data: {
+        user: mockUser,
+        session: {
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh-token',
+          expires_at: Date.now() + 3600000
+        }
+      },
+      error: null
+    };
+  },
+
+  // Gestion des erreurs d'authentification
+  handleAuthError(error: any, operation: string, email?: string, userData?: any) {
+    const errorMessage = (error as Error).message;
+    
+    // Erreurs réseau - basculer en mode démo
+    if (errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('AbortError')) {
+      console.warn(`Erreur réseau lors de ${operation} - Mode démo activé`);
+      return this.handleOfflineAuth(operation, email || 'demo@example.com', userData);
+    }
+
+    // Autres erreurs - retourner l'erreur réelle
+    return {
+      data: { user: null, session: null },
+      error: { message: this.translateError(errorMessage) }
+    };
+  },
+
+  // Session démo
+  getDemoSession() {
+    return {
+      data: {
+        session: {
+          user: {
+            id: 'demo-user-id',
+            email: 'demo@example.com',
+            user_metadata: {
+              first_name: 'Demo',
+              last_name: 'User'
+            }
+          },
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh-token',
+          expires_at: Date.now() + 3600000
+        }
+      },
+      error: null
+    };
+  },
+
+  // Profil démo
+  getDemoProfile(userId: string) {
+    return {
+      data: {
+        id: userId,
+        email: 'demo@example.com',
+        first_name: 'Demo',
+        last_name: 'User',
+        company_name: 'Demo Company',
+        phone: '0123456789',
+        plan: 'starter',
+        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        subscription_status: 'trial',
+        role: 'user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      error: null
+    };
+  },
+
+  // Traduction des erreurs
+  translateError(message: string): string {
+    const translations: Record<string, string> = {
+      'Invalid login credentials': 'Email ou mot de passe incorrect',
+      'Email not confirmed': 'Veuillez confirmer votre email avant de vous connecter',
+      'Too many requests': 'Trop de tentatives. Veuillez réessayer dans quelques minutes',
+      'User already registered': 'Un compte avec cette adresse email existe déjà',
+      'Password should be at least': 'Le mot de passe doit contenir au moins 6 caractères',
+      'Invalid email': 'Format d\'email invalide'
+    };
+
+    for (const [key, value] of Object.entries(translations)) {
+      if (message.includes(key)) {
+        return value;
+      }
+    }
+
+    return message;
+  }
+};
+
+// Fonctions pour la gestion des abonnements
+export const subscription = {
+  async updatePlan(userId: string, plan: 'starter' | 'professional' | 'expert') {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - mise à jour du plan simulée');
+        return { data: { plan }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          plan,
+          subscription_status: 'active'
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  async extendTrial(userId: string, days: number = 14) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - extension d\'essai simulée');
+        return { data: { trial_ends_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }, error: null };
+      }
+
+      const newTrialEnd = new Date();
+      newTrialEnd.setDate(newTrialEnd.getDate() + days);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          trial_ends_at: newTrialEnd.toISOString()
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  async cancelSubscription(userId: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - annulation simulée');
+        return { data: { subscription_status: 'cancelled' }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          subscription_status: 'cancelled'
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  }
+};
+
+// Fonction pour surveiller l'état de la connexion
+export const startConnectionMonitoring = () => {
+  setInterval(async () => {
+    const status = getConnectionStatus();
+    if (!status.connected && status.configured) {
+      console.log('Vérification de la reconnexion Supabase...');
+      await checkSupabaseConnection();
+    }
+  }, 60000); // Vérifier toutes les minutes
+};
+
+// Démarrer la surveillance automatiquement
+if (typeof window !== 'undefined') {
+  startConnectionMonitoring();
+}
