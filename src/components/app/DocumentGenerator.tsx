@@ -163,17 +163,27 @@ const DocumentGenerator = () => {
 
   const handleDocumentSaved = async (document: GeneratedDocument) => {
     try {
+      console.log('💾 Sauvegarde du document:', document.name);
+      
       // Générer et stocker le PDF
       await generateAndStorePDF(document);
+      
+      console.log('📄 PDF généré et stocké');
       
       // Sauvegarder le document (Supabase + localStorage)
       await documentStorage.saveDocument(document);
       
+      console.log('✅ Document sauvegardé avec succès');
+      
       await loadDocuments();
       setShowDocumentForm(false);
       setSelectedTemplate(null);
+      
+      // Afficher un message de succès
+      alert(`Document "${document.name}" créé et sauvegardé avec succès !`);
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
+      console.error('❌ Erreur lors de la sauvegarde:', error);
+      alert(`Erreur lors de la sauvegarde du document: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     }
   };
 

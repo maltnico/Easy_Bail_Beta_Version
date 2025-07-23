@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { GeneratedDocument, DocumentTemplate } from '../types/documents';
 import { documentTemplates } from './documentTemplates';
+import { activityService } from './activityService';
 
 class DocumentStorage {
   private bucketName = 'documents';
@@ -101,6 +102,9 @@ class DocumentStorage {
   // Sauvegarder un document généré
   async saveDocument(document: GeneratedDocument): Promise<GeneratedDocument> {
     try {
+      // Sauvegarder d'abord dans la table documents de Supabase
+      await this.saveToDatabase(document);
+      
       // Try to initialize Supabase bucket first
       const bucketReady = await this.initializeBucket();
       
@@ -150,6 +154,85 @@ class DocumentStorage {
     }
   }
   
+  // Nouvelle méthode pour sauvegarder dans la table documents
+  private async saveToDatabase(document: GeneratedDocument): Promise<void> {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        throw new Error('Utilisateur non connecté');
+      }
+
+      // Préparer les données pour la table documents
+      const documentData = {
+        id: document.id,
+        user_id: userData.user.id,
+        property_id: document.propertyId || null,
+        tenant_id: document.tenantId || null,
+        name: document.name,
+        type: document.type,
+        content: document.content,
+        status: document.status,
+        metadata: JSON.stringify({
+          ...document.metadata,
+          templateId: document.templateId,
+          signatures: document.signatures
+        }),
+        signed_at: document.signedAt?.toISOString() || null,
+        expires_at: document.expiresAt?.toISOString() || null
+      };
+
+      // Vérifier si le document existe déjà
+      const { data: existingDoc } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('id', document.id)
+        .single();
+
+      if (existingDoc) {
+        // Mettre à jour le document existant
+        const { error } = await supabase
+          .from('documents')
+          .update(documentData)
+          .eq('id', document.id);
+        
+        if (error) throw error;
+      } else {
+        // Insérer un nouveau document
+        const { error } = await supabase
+          .from('documents')
+          .insert(documentData);
+        
+        if (error) throw error;
+      }
+
+      // Log activity
+      try {
+        await activityService.addActivity({
+          type: 'document',
+          action: existingDoc ? 'updated' : 'created',
+          title: `Document ${existingDoc ? 'mis à jour' : 'créé'}`,
+          description: document.name,
+          entityId: document.id,
+          entityType: 'document',
+          entityName: document.name,
+          userId: userData.user.id,
+          metadata: {
+            type: document.type,
+            status: document.status
+          },
+          priority: 'medium',
+          category: 'success'
+        });
+      } catch (activityError) {
+        console.warn('Could not log document activity:', activityError);
+      }
+      
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde en base de données:', error);
+      // Ne pas faire échouer complètement, continuer avec le stockage local
+    }
+  }
+
   // Fallback method to save document to localStorage
   private saveDocumentToLocalStorage(document: GeneratedDocument): Promise<GeneratedDocument> {
     try {
@@ -186,6 +269,12 @@ class DocumentStorage {
   // Récupérer tous les documents
   async getDocumentsList(): Promise<GeneratedDocument[]> {
     try {
+      // Essayer d'abord de récupérer depuis la base de données
+      const documentsFromDB = await this.getDocumentsFromDatabase();
+      if (documentsFromDB.length > 0) {
+        return documentsFromDB;
+      }
+      
       // Try to get from Supabase first
       const bucketReady = await this.initializeBucket();
       
@@ -246,6 +335,58 @@ class DocumentStorage {
     }
   }
 
+  // Nouvelle méthode pour récupérer depuis la base de données
+  private async getDocumentsFromDatabase(): Promise<GeneratedDocument[]> {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', userData.user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Convertir les données de la base vers le format GeneratedDocument
+      return (data || []).map(doc => {
+        const metadata = typeof doc.metadata === 'string' 
+          ? JSON.parse(doc.metadata) 
+          : doc.metadata || {};
+        
+        return {
+          id: doc.id,
+          templateId: metadata.templateId || '',
+          userId: doc.user_id,
+          name: doc.name,
+          type: doc.type as any,
+          status: doc.status as any,
+          propertyId: doc.property_id,
+          tenantId: doc.tenant_id,
+          data: {},
+          content: doc.content,
+          signatures: metadata.signatures || [],
+          createdAt: new Date(doc.created_at),
+          updatedAt: new Date(doc.updated_at),
+          signedAt: doc.signed_at ? new Date(doc.signed_at) : undefined,
+          expiresAt: doc.expires_at ? new Date(doc.expires_at) : undefined,
+          metadata: {
+            version: metadata.version || '1.0',
+            generatedBy: metadata.generatedBy || 'EasyBail Document Generator',
+            legalFramework: metadata.legalFramework || '',
+            pdfData: metadata.pdfData
+          }
+        } as GeneratedDocument;
+      });
+    } catch (error) {
+      console.error('Erreur lors de la récupération depuis la base de données:', error);
+      return [];
+    }
+  }
+
   // Fallback method to get documents from localStorage
   private getDocumentsFromLocalStorage(): Promise<GeneratedDocument[]> {
     try {
@@ -288,6 +429,12 @@ class DocumentStorage {
   // Récupérer un document par ID
   async getDocument(id: string): Promise<GeneratedDocument | null> {
     try {
+      // Essayer d'abord depuis la base de données
+      const docFromDB = await this.getDocumentFromDatabase(id);
+      if (docFromDB) {
+        return docFromDB;
+      }
+      
       // Try to get from Supabase first
       const bucketReady = await this.initializeBucket();
       
@@ -328,6 +475,56 @@ class DocumentStorage {
     }
   }
   
+  // Nouvelle méthode pour récupérer un document depuis la base
+  private async getDocumentFromDatabase(id: string): Promise<GeneratedDocument | null> {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', userData.user.id)
+        .single();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      const metadata = typeof data.metadata === 'string' 
+        ? JSON.parse(data.metadata) 
+        : data.metadata || {};
+      
+      return {
+        id: data.id,
+        templateId: metadata.templateId || '',
+        userId: data.user_id,
+        name: data.name,
+        type: data.type as any,
+        status: data.status as any,
+        propertyId: data.property_id,
+        tenantId: data.tenant_id,
+        data: {},
+        content: data.content,
+        signatures: metadata.signatures || [],
+        createdAt: new Date(data.created_at),
+        updatedAt: new Date(data.updated_at),
+        signedAt: data.signed_at ? new Date(data.signed_at) : undefined,
+        expiresAt: data.expires_at ? new Date(data.expires_at) : undefined,
+        metadata: {
+          version: metadata.version || '1.0',
+          generatedBy: metadata.generatedBy || 'EasyBail Document Generator',
+          legalFramework: metadata.legalFramework || '',
+          pdfData: metadata.pdfData
+        }
+      } as GeneratedDocument;
+    } catch (error) {
+      console.error('Erreur lors de la récupération du document depuis la base:', error);
+      return null;
+    }
+  }
 
   // Récupérer les documents par bien
   async getDocumentsByProperty(propertyId: string): Promise<GeneratedDocument[]> {
@@ -354,6 +551,9 @@ class DocumentStorage {
   // Mettre à jour le statut d'un document
   async updateDocumentStatus(id: string, status: GeneratedDocument['status']): Promise<GeneratedDocument> {
     try {
+      // Mettre à jour d'abord en base de données
+      await this.updateDocumentStatusInDatabase(id, status);
+      
       // Get the document first
       const document = await this.getDocument(id);
       
@@ -379,9 +579,41 @@ class DocumentStorage {
     }
   }
 
+  // Nouvelle méthode pour mettre à jour le statut en base
+  private async updateDocumentStatusInDatabase(id: string, status: GeneratedDocument['status']): Promise<void> {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        return;
+      }
+
+      const updateData: any = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+
+      if (status === 'signed') {
+        updateData.signed_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('documents')
+        .update(updateData)
+        .eq('id', id)
+        .eq('user_id', userData.user.id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du statut en base:', error);
+    }
+  }
+
   // Supprimer un document
   async deleteDocument(id: string): Promise<void> {
     try {
+      // Supprimer d'abord de la base de données
+      await this.deleteDocumentFromDatabase(id);
+      
       // Try to delete from Supabase first
       const bucketReady = await this.initializeBucket();
       
@@ -409,6 +641,26 @@ class DocumentStorage {
     } catch (error) {
       console.error('Erreur lors de la suppression du document:', error);
       throw error;
+    }
+  }
+
+  // Nouvelle méthode pour supprimer de la base
+  private async deleteDocumentFromDatabase(id: string): Promise<void> {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        return;
+      }
+
+      const { error } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userData.user.id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Erreur lors de la suppression du document en base:', error);
     }
   }
 
