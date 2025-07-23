@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
+import { ThemeProvider } from './components/ThemeProvider';
 import './index.css';
 import { automationScheduler } from './lib/automationScheduler';
 
@@ -9,6 +10,8 @@ automationScheduler.start();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </StrictMode>
 );
