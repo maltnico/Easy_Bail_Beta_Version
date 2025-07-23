@@ -1,589 +1,555 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../types/database';
-import { activityService } from '../../lib/activityService';
+import React, { useState, useEffect } from 'react';
+import { X, Save, DollarSign, Calendar, Tag, FileText, Building, Users, CreditCard, Repeat, AlertCircle } from 'lucide-react';
+import { FinancialFlow, FinancialCategory } from '../../types/financial';
+import { useProperties, useTenants } from '../../hooks/data';
 
-// Types pour l'authentification
-export type AuthUser = {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  company_name?: string;
-  phone?: string;
-  plan: 'starter' | 'professional' | 'expert';
-  trial_ends_at: string;
-  subscription_status: 'trial' | 'active' | 'cancelled' | 'expired';
-  role?: 'user' | 'admin' | 'manager';
-  avatar_url?: string;
-  created_at: string;
-  updated_at: string;
-};
+interface FinancialFlowFormProps {
+  flow: FinancialFlow | null;
+  categories: FinancialCategory[];
+  onSave: (flowData: Omit<FinancialFlow, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  onCancel: () => void;
+  isOpen: boolean;
+}
 
-// Configuration et état de la connexion
-class SupabaseConnection {
-  private client: any = null;
-  private isConfigured = false;
-  private isConnected = false;
-  private connectionAttempts = 0;
-  private maxRetries = 3;
-  private retryDelay = 2000;
-  private lastConnectionCheck = 0;
-  private connectionCheckInterval = 30000; // 30 secondes
+const FinancialFlowForm: React.FC<FinancialFlowFormProps> = ({
+  flow,
+  categories,
+  onSave,
+  onCancel,
+  isOpen
+}) => {
+  const { properties } = useProperties();
+  const { tenants } = useTenants();
 
-  constructor() {
-    this.initialize();
-  }
+  const [formData, setFormData] = useState({
+    type: 'income' as 'income' | 'expense',
+    category: '',
+    amount: '',
+    description: '',
+    date: new Date().toISOString().split('T')[0],
+    propertyId: '',
+    tenantId: '',
+    status: 'pending' as 'pending' | 'completed' | 'cancelled',
+    paymentMethod: 'bank_transfer' as 'bank_transfer' | 'cash' | 'check' | 'direct_debit',
+    reference: '',
+    notes: '',
+    recurring: false,
+    recurrenceFrequency: 'monthly' as 'monthly' | 'quarterly' | 'yearly',
+    recurrenceEndDate: '',
+    tags: [] as string[]
+  });
 
-  private initialize() {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [newTag, setNewTag] = useState('');
 
-    // Validation des variables d'environnement
-    this.isConfigured = this.validateConfig(supabaseUrl, supabaseAnonKey);
-
-    if (this.isConfigured) {
-      this.createClient(supabaseUrl, supabaseAnonKey);
+  useEffect(() => {
+    if (flow) {
+      setFormData({
+        type: flow.type,
+        category: flow.category,
+        amount: flow.amount.toString(),
+        description: flow.description,
+        date: flow.date.toISOString().split('T')[0],
+        propertyId: flow.propertyId || '',
+        tenantId: flow.tenantId || '',
+        status: flow.status,
+        paymentMethod: flow.paymentMethod || 'bank_transfer',
+        reference: flow.reference || '',
+        notes: flow.notes || '',
+        recurring: flow.recurring || false,
+        recurrenceFrequency: flow.recurrenceFrequency || 'monthly',
+        recurrenceEndDate: flow.recurrenceEndDate ? flow.recurrenceEndDate.toISOString().split('T')[0] : '',
+        tags: flow.tags || []
+      });
     } else {
-      console.warn('Configuration Supabase invalide - Mode démo activé');
-    }
-  }
-
-  private validateConfig(url: string, key: string): boolean {
-    if (!url || !key) {
-      console.warn('Variables d\'environnement Supabase manquantes');
-      return false;
-    }
-
-    if (url.includes('your-project-id') || key.includes('your-anon-key')) {
-      console.warn('Variables d\'environnement Supabase contiennent des valeurs par défaut');
-      return false;
-    }
-
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      console.warn('URL Supabase invalide');
-      return false;
-    }
-  }
-
-  private createClient(url: string, key: string) {
-    this.client = createClient<Database>(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-      global: {
-        fetch: this.createFetchWrapper(),
-      },
-    });
-  }
-
-  private createFetchWrapper() {
-    return async (url: string, options: any = {}) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      try {
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        
-        // Marquer comme connecté si la requête réussit
-        if (response.ok) {
-          this.isConnected = true;
-          this.connectionAttempts = 0;
-        }
-
-        return response;
-      } catch (error) {
-        clearTimeout(timeoutId);
-        this.handleConnectionError(error);
-        throw error;
-      }
-    };
-  }
-
-  private handleConnectionError(error: any) {
-    const isNetworkError = 
-      error.name === 'AbortError' ||
-      error.name === 'TimeoutError' ||
-      error.message?.includes('Failed to fetch') ||
-      error.message?.includes('NetworkError') ||
-      error.message?.includes('timeout');
-
-    if (isNetworkError) {
-      this.isConnected = false;
-      this.connectionAttempts++;
-      
-      if (this.connectionAttempts <= this.maxRetries) {
-        console.warn(`Tentative de reconnexion ${this.connectionAttempts}/${this.maxRetries}`);
-        setTimeout(() => this.attemptReconnection(), this.retryDelay * this.connectionAttempts);
-      } else {
-        console.warn('Nombre maximum de tentatives de reconnexion atteint');
-      }
-    }
-  }
-
-  private async attemptReconnection() {
-    try {
-      const connected = await this.checkConnection();
-      if (connected) {
-        console.log('Reconnexion Supabase réussie');
-        this.isConnected = true;
-        this.connectionAttempts = 0;
-      }
-    } catch (error) {
-      console.warn('Échec de la reconnexion:', error);
-    }
-  }
-
-  async checkConnection(): Promise<boolean> {
-    if (!this.isConfigured || !this.client) return false;
-
-    const now = Date.now();
-    if (now - this.lastConnectionCheck < this.connectionCheckInterval) {
-      return this.isConnected;
-    }
-
-    try {
-      const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
-      this.isConnected = !error;
-      this.lastConnectionCheck = now;
-      return this.isConnected;
-    } catch (error) {
-      this.isConnected = false;
-      this.lastConnectionCheck = now;
-      return false;
-    }
-  }
-
-  getClient() {
-    return this.client;
-  }
-
-  isReady(): boolean {
-    return this.isConfigured && this.isConnected;
-  }
-
-  getConnectionStatus() {
-    return {
-      configured: this.isConfigured,
-      connected: this.isConnected,
-      attempts: this.connectionAttempts,
-    };
-  }
-}
-
-// Instance singleton de la connexion
-const supabaseConnection = new SupabaseConnection();
-export const supabase = supabaseConnection.getClient();
-
-// Fonctions utilitaires
-export const checkSupabaseConnection = () => supabaseConnection.checkConnection();
-export const isConnected = () => supabaseConnection.isReady();
-export const getConnectionStatus = () => supabaseConnection.getConnectionStatus();
-
-// Service d'authentification amélioré
-export const auth = {
-  // Inscription avec gestion d'erreur améliorée
-  async signUp(email: string, password: string, userData: {
-    firstName: string;
-    lastName: string;
-    companyName?: string;
-    phone?: string;
-  }) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.handleOfflineAuth('signup', email, userData);
-      }
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            company_name: userData.companyName,
-            phone: userData.phone
-          },
-        }
+      // Reset form for new flow
+      setFormData({
+        type: 'income',
+        category: '',
+        amount: '',
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        propertyId: '',
+        tenantId: '',
+        status: 'pending',
+        paymentMethod: 'bank_transfer',
+        reference: '',
+        notes: '',
+        recurring: false,
+        recurrenceFrequency: 'monthly',
+        recurrenceEndDate: '',
+        tags: []
       });
-
-      if (error) throw error;
-
-      // Log de l'activité si possible
-      try {
-        await activityService.addActivity({
-          type: 'system',
-          action: 'user_signup',
-          title: 'Nouveau compte créé',
-          description: `Compte créé pour ${userData.firstName} ${userData.lastName}`,
-          userId: data.user?.id || 'unknown',
-          priority: 'medium',
-          category: 'success'
-        });
-      } catch (activityError) {
-        console.warn('Impossible de logger l\'activité:', activityError);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return this.handleAuthError(error, 'signup', email, userData);
     }
-  },
+    setErrors({});
+  }, [flow]);
 
-  // Connexion avec gestion d'erreur améliorée
-  async signIn(email: string, password: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.handleOfflineAuth('signin', email);
-      }
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) throw error;
-
-      // Log de l'activité si possible
-      try {
-        await activityService.addActivity({
-          type: 'login',
-          action: 'user_signin',
-          title: 'Connexion utilisateur',
-          description: `Connexion réussie pour ${email}`,
-          userId: data.user?.id || 'unknown',
-          priority: 'low',
-          category: 'info'
-        });
-      } catch (activityError) {
-        console.warn('Impossible de logger l\'activité:', activityError);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return this.handleAuthError(error, 'signin', email);
+    if (!formData.description.trim()) {
+      newErrors.description = 'La description est requise';
     }
-  },
 
-  // Déconnexion
-  async signOut() {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return { error: null };
-      }
-
-      const { error } = await supabase.auth.signOut();
-      return { error: error ? { message: error.message } : null };
-    } catch (error) {
-      console.warn('Erreur lors de la déconnexion:', error);
-      return { error: null }; // Toujours permettre la déconnexion locale
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      newErrors.amount = 'Le montant doit être supérieur à 0';
     }
-  },
 
-  // Récupérer la session actuelle
-  async getSession() {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.getDemoSession();
-      }
-
-      const { data, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        // Gérer les erreurs de session invalide
-        if (error.message.includes('User from sub claim in JWT does not exist') ||
-            error.message.includes('Invalid Refresh Token')) {
-          await supabase.auth.signOut();
-          return { data: { session: null }, error: null };
-        }
-        throw error;
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      console.warn('Erreur lors de la récupération de session:', error);
-      return this.getDemoSession();
+    if (!formData.category) {
+      newErrors.category = 'La catégorie est requise';
     }
-  },
 
-  // Récupérer le profil utilisateur
-  async getProfile(userId: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.getDemoProfile(userId);
-      }
-
-      const { data: session, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) throw sessionError;
-      
-      if (session?.session?.user.id === userId) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-        
-        if (error) throw error;
-        return { data, error: null };
-      }
-      
-      throw new Error('Utilisateur non trouvé');
-    } catch (error) {
-      console.warn('Erreur lors de la récupération du profil:', error);
-      return this.getDemoProfile(userId);
+    if (!formData.date) {
+      newErrors.date = 'La date est requise';
     }
-  },
 
-  // Mettre à jour le profil
-  async updateProfile(userId: string, updates: Partial<AuthUser>) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - mise à jour du profil simulée');
-        return { data: { ...updates, id: userId }, error: null };
+    if (formData.recurring && formData.recurrenceEndDate) {
+      const endDate = new Date(formData.recurrenceEndDate);
+      const startDate = new Date(formData.date);
+      if (endDate <= startDate) {
+        newErrors.recurrenceEndDate = 'La date de fin doit être postérieure à la date de début';
       }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
     }
-  },
 
-  // Réinitialiser le mot de passe
-  async resetPassword(email: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - réinitialisation simulée');
-        return { data: {}, error: null };
-      }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
-      return { data: {}, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  // Gestion de l'authentification hors ligne
-  handleOfflineAuth(operation: string, email: string, userData?: any) {
-    console.warn(`Mode hors ligne activé pour ${operation}`);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    const mockUser = {
-      id: 'demo-user-id',
-      email,
-      user_metadata: userData ? {
-        first_name: userData.firstName,
-        last_name: userData.lastName,
-        company_name: userData.companyName,
-        phone: userData.phone
-      } : {
-        first_name: 'Demo',
-        last_name: 'User'
-      }
-    };
-
-    return {
-      data: {
-        user: mockUser,
-        session: {
-          access_token: 'demo-token',
-          refresh_token: 'demo-refresh-token',
-          expires_at: Date.now() + 3600000
-        }
-      },
-      error: null
-    };
-  },
-
-  // Gestion des erreurs d'authentification
-  handleAuthError(error: any, operation: string, email?: string, userData?: any) {
-    const errorMessage = (error as Error).message;
-    
-    // Erreurs réseau - basculer en mode démo
-    if (errorMessage.includes('Failed to fetch') ||
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('NetworkError') ||
-        errorMessage.includes('AbortError')) {
-      console.warn(`Erreur réseau lors de ${operation} - Mode démo activé`);
-      return this.handleOfflineAuth(operation, email || 'demo@example.com', userData);
+    if (!validateForm()) {
+      return;
     }
 
-    // Autres erreurs - retourner l'erreur réelle
-    return {
-      data: { user: null, session: null },
-      error: { message: this.translateError(errorMessage) }
-    };
-  },
+    setSaving(true);
+    try {
+      const flowData = {
+        userId: 'current-user-id', // This should come from auth context
+        type: formData.type,
+        category: formData.category,
+        amount: parseFloat(formData.amount),
+        description: formData.description,
+        date: new Date(formData.date),
+        propertyId: formData.propertyId || null,
+        tenantId: formData.tenantId || null,
+        status: formData.status,
+        paymentMethod: formData.paymentMethod,
+        reference: formData.reference,
+        notes: formData.notes,
+        recurring: formData.recurring,
+        recurrenceFrequency: formData.recurring ? formData.recurrenceFrequency : null,
+        recurrenceEndDate: formData.recurring && formData.recurrenceEndDate ? new Date(formData.recurrenceEndDate) : null,
+        tags: formData.tags
+      };
 
-  // Session démo
-  getDemoSession() {
-    return {
-      data: {
-        session: {
-          user: {
-            id: 'demo-user-id',
-            email: 'demo@example.com',
-            user_metadata: {
-              first_name: 'Demo',
-              last_name: 'User'
-            }
-          },
-          access_token: 'demo-token',
-          refresh_token: 'demo-refresh-token',
-          expires_at: Date.now() + 3600000
-        }
-      },
-      error: null
-    };
-  },
-
-  // Profil démo
-  getDemoProfile(userId: string) {
-    return {
-      data: {
-        id: userId,
-        email: 'demo@example.com',
-        first_name: 'Demo',
-        last_name: 'User',
-        company_name: 'Demo Company',
-        phone: '0123456789',
-        plan: 'starter',
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        subscription_status: 'trial',
-        role: 'user',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      error: null
-    };
-  },
-
-  // Traduction des erreurs
-  translateError(message: string): string {
-    const translations: Record<string, string> = {
-      'Invalid login credentials': 'Email ou mot de passe incorrect',
-      'Email not confirmed': 'Veuillez confirmer votre email avant de vous connecter',
-      'Too many requests': 'Trop de tentatives. Veuillez réessayer dans quelques minutes',
-      'User already registered': 'Un compte avec cette adresse email existe déjà',
-      'Password should be at least': 'Le mot de passe doit contenir au moins 6 caractères',
-      'Invalid email': 'Format d\'email invalide'
-    };
-
-    for (const [key, value] of Object.entries(translations)) {
-      if (message.includes(key)) {
-        return value;
-      }
+      await onSave(flowData);
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error);
+    } finally {
+      setSaving(false);
     }
+  };
 
-    return message;
-  }
+  const handleAddTag = () => {
+    if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...prev.tags, newTag.trim()]
+      }));
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }));
+  };
+
+  const filteredTenants = tenants.filter(tenant => 
+    !formData.propertyId || tenant.propertyId === formData.propertyId
+  );
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <form onSubmit={handleSubmit}>
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <DollarSign className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {flow ? 'Modifier le flux financier' : 'Nouveau flux financier'}
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {flow ? 'Modifiez les informations du flux' : 'Ajoutez un nouveau flux de revenus ou de dépenses'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {/* Type and Basic Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Type de flux *
+                </label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="type"
+                      value="income"
+                      checked={formData.type === 'income'}
+                      onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'income' | 'expense' }))}
+                      className="mr-2"
+                    />
+                    <span className="text-green-600">Revenu</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="type"
+                      value="expense"
+                      checked={formData.type === 'expense'}
+                      onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'income' | 'expense' }))}
+                      className="mr-2"
+                    />
+                    <span className="text-red-600">Dépense</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Montant * (€)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.amount}
+                  onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.amount ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="0.00"
+                />
+                {errors.amount && (
+                  <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Description and Category */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description *
+                </label>
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.description ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Description du flux financier"
+                />
+                {errors.description && (
+                  <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Catégorie *
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.category ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Sélectionner une catégorie</option>
+                  {categories
+                    .filter(cat => cat.type === formData.type)
+                    .map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                </select>
+                {errors.category && (
+                  <p className="mt-1 text-sm text-red-600">{errors.category}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Date and Status */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date *
+                </label>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.date ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {errors.date && (
+                  <p className="mt-1 text-sm text-red-600">{errors.date}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Statut
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="pending">En attente</option>
+                  <option value="completed">Validé</option>
+                  <option value="cancelled">Annulé</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Property and Tenant */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Bien immobilier
+                </label>
+                <select
+                  value={formData.propertyId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, propertyId: e.target.value, tenantId: '' }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Aucun bien sélectionné</option>
+                  {properties.map(property => (
+                    <option key={property.id} value={property.id}>
+                      {property.name} - {property.address}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Locataire
+                </label>
+                <select
+                  value={formData.tenantId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, tenantId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!formData.propertyId}
+                >
+                  <option value="">Aucun locataire sélectionné</option>
+                  {filteredTenants.map(tenant => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.firstName} {tenant.lastName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Payment Method and Reference */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Méthode de paiement
+                </label>
+                <select
+                  value={formData.paymentMethod}
+                  onChange={(e) => setFormData(prev => ({ ...prev, paymentMethod: e.target.value as any }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="bank_transfer">Virement bancaire</option>
+                  <option value="cash">Espèces</option>
+                  <option value="check">Chèque</option>
+                  <option value="direct_debit">Prélèvement automatique</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Référence
+                </label>
+                <input
+                  type="text"
+                  value={formData.reference}
+                  onChange={(e) => setFormData(prev => ({ ...prev, reference: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Numéro de référence ou de facture"
+                />
+              </div>
+            </div>
+
+            {/* Recurring Options */}
+            <div className="space-y-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="recurring"
+                  checked={formData.recurring}
+                  onChange={(e) => setFormData(prev => ({ ...prev, recurring: e.target.checked }))}
+                  className="mr-2"
+                />
+                <label htmlFor="recurring" className="text-sm font-medium text-gray-700">
+                  Flux récurrent
+                </label>
+              </div>
+
+              {formData.recurring && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Fréquence
+                    </label>
+                    <select
+                      value={formData.recurrenceFrequency}
+                      onChange={(e) => setFormData(prev => ({ ...prev, recurrenceFrequency: e.target.value as any }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="monthly">Mensuel</option>
+                      <option value="quarterly">Trimestriel</option>
+                      <option value="yearly">Annuel</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date de fin (optionnel)
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.recurrenceEndDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, recurrenceEndDate: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors.recurrenceEndDate ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {errors.recurrenceEndDate && (
+                      <p className="mt-1 text-sm text-red-600">{errors.recurrenceEndDate}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tags
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.tags.map((tag, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="ml-1 text-blue-600 hover:text-blue-800"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ajouter un tag"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddTag}
+                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <Tag className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notes
+              </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Notes additionnelles..."
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  <span>Sauvegarde...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>{flow ? 'Modifier' : 'Créer'}</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
 
-// Fonctions pour la gestion des abonnements
-export const subscription = {
-  async updatePlan(userId: string, plan: 'starter' | 'professional' | 'expert') {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - mise à jour du plan simulée');
-        return { data: { plan }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          plan,
-          subscription_status: 'active'
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  async extendTrial(userId: string, days: number = 14) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - extension d\'essai simulée');
-        return { data: { trial_ends_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }, error: null };
-      }
-
-      const newTrialEnd = new Date();
-      newTrialEnd.setDate(newTrialEnd.getDate() + days);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          trial_ends_at: newTrialEnd.toISOString()
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  async cancelSubscription(userId: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - annulation simulée');
-        return { data: { subscription_status: 'cancelled' }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          subscription_status: 'cancelled'
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  }
-};
-
-// Fonction pour surveiller l'état de la connexion
-export const startConnectionMonitoring = () => {
-  setInterval(async () => {
-    const status = getConnectionStatus();
-    if (!status.connected && status.configured) {
-      console.log('Vérification de la reconnexion Supabase...');
-      await checkSupabaseConnection();
-    }
-  }, 60000); // Vérifier toutes les minutes
-};
-
-// Démarrer la surveillance automatiquement
-if (typeof window !== 'undefined') {
-  startConnectionMonitoring();
-}
+export default FinancialFlowForm;
