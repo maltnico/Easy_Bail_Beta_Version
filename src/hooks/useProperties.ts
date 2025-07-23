@@ -1,250 +1,589 @@
-import { useState, useEffect } from 'react';
-import { Property } from '../types';
-import { propertiesApi } from '../lib/properties';
-import { activityService } from '../lib/activityService';
-import { isCacheValid, getCachedData, cacheData, invalidateCache } from '../utils/useLocalStorage';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../types/database';
+import { activityService } from './activityService';
 
-interface UsePropertiesReturn {
-  properties: Property[];
-  loading: boolean;
-  error: string | null;
-  availableProperties: Property[];
-  createProperty: (property: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  updateProperty: (id: string, property: Partial<Property>) => Promise<void>;
-  deleteProperty: (id: string) => Promise<void>;
-  refreshProperties: () => Promise<void>;
+// Types pour l'authentification
+export type AuthUser = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  company_name?: string;
+  phone?: string;
+  plan: 'starter' | 'professional' | 'expert';
+  trial_ends_at: string;
+  subscription_status: 'trial' | 'active' | 'cancelled' | 'expired';
+  role?: 'user' | 'admin' | 'manager';
+  avatar_url?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+// Configuration et état de la connexion
+class SupabaseConnection {
+  private client: any = null;
+  private isConfigured = false;
+  private isConnected = false;
+  private connectionAttempts = 0;
+  private maxRetries = 3;
+  private retryDelay = 2000;
+  private lastConnectionCheck = 0;
+  private connectionCheckInterval = 30000; // 30 secondes
+
+  constructor() {
+    this.initialize();
+  }
+
+  private initialize() {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+    // Validation des variables d'environnement
+    this.isConfigured = this.validateConfig(supabaseUrl, supabaseAnonKey);
+
+    if (this.isConfigured) {
+      this.createClient(supabaseUrl, supabaseAnonKey);
+    } else {
+      console.warn('Configuration Supabase invalide - Mode démo activé');
+    }
+  }
+
+  private validateConfig(url: string, key: string): boolean {
+    if (!url || !key) {
+      console.warn('Variables d\'environnement Supabase manquantes');
+      return false;
+    }
+
+    if (url.includes('your-project-id') || key.includes('your-anon-key')) {
+      console.warn('Variables d\'environnement Supabase contiennent des valeurs par défaut');
+      return false;
+    }
+
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      console.warn('URL Supabase invalide');
+      return false;
+    }
+  }
+
+  private createClient(url: string, key: string) {
+    this.client = createClient<Database>(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+      global: {
+        fetch: this.createFetchWrapper(),
+      },
+    });
+  }
+
+  private createFetchWrapper() {
+    return async (url: string, options: any = {}) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        
+        // Marquer comme connecté si la requête réussit
+        if (response.ok) {
+          this.isConnected = true;
+          this.connectionAttempts = 0;
+        }
+
+        return response;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        this.handleConnectionError(error);
+        throw error;
+      }
+    };
+  }
+
+  private handleConnectionError(error: any) {
+    const isNetworkError = 
+      error.name === 'AbortError' ||
+      error.name === 'TimeoutError' ||
+      error.message?.includes('Failed to fetch') ||
+      error.message?.includes('NetworkError') ||
+      error.message?.includes('timeout');
+
+    if (isNetworkError) {
+      this.isConnected = false;
+      this.connectionAttempts++;
+      
+      if (this.connectionAttempts <= this.maxRetries) {
+        console.warn(`Tentative de reconnexion ${this.connectionAttempts}/${this.maxRetries}`);
+        setTimeout(() => this.attemptReconnection(), this.retryDelay * this.connectionAttempts);
+      } else {
+        console.warn('Nombre maximum de tentatives de reconnexion atteint');
+      }
+    }
+  }
+
+  private async attemptReconnection() {
+    try {
+      const connected = await this.checkConnection();
+      if (connected) {
+        console.log('Reconnexion Supabase réussie');
+        this.isConnected = true;
+        this.connectionAttempts = 0;
+      }
+    } catch (error) {
+      console.warn('Échec de la reconnexion:', error);
+    }
+  }
+
+  async checkConnection(): Promise<boolean> {
+    if (!this.isConfigured || !this.client) return false;
+
+    const now = Date.now();
+    if (now - this.lastConnectionCheck < this.connectionCheckInterval) {
+      return this.isConnected;
+    }
+
+    try {
+      const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
+      this.isConnected = !error;
+      this.lastConnectionCheck = now;
+      return this.isConnected;
+    } catch (error) {
+      this.isConnected = false;
+      this.lastConnectionCheck = now;
+      return false;
+    }
+  }
+
+  getClient() {
+    return this.client;
+  }
+
+  isReady(): boolean {
+    return this.isConfigured && this.isConnected;
+  }
+
+  getConnectionStatus() {
+    return {
+      configured: this.isConfigured,
+      connected: this.isConnected,
+      attempts: this.connectionAttempts,
+    };
+  }
 }
 
-export const useProperties = (): UsePropertiesReturn => {
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [availableProperties, setAvailableProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+// Instance singleton de la connexion
+const supabaseConnection = new SupabaseConnection();
+export const supabase = supabaseConnection.getClient();
 
-  // Clés de cache
-  const PROPERTIES_CACHE_KEY = 'easybail_properties_cache';
-  const AVAILABLE_PROPERTIES_CACHE_KEY = 'easybail_available_properties_cache';
+// Fonctions utilitaires
+export const checkSupabaseConnection = () => supabaseConnection.checkConnection();
+export const isConnected = () => supabaseConnection.isReady();
+export const getConnectionStatus = () => supabaseConnection.getConnectionStatus();
 
-  const handleSupabaseError = (err: any): string => {
-    // Gestion d'erreur générique pour le stockage local
-    return err instanceof Error ? err.message : 'Une erreur est survenue';
-  };
-
-  const loadProperties = async () => {
+// Service d'authentification amélioré
+export const auth = {
+  // Inscription avec gestion d'erreur améliorée
+  async signUp(email: string, password: string, userData: {
+    firstName: string;
+    lastName: string;
+    companyName?: string;
+    phone?: string;
+  }) {
     try {
-      setLoading(true);
-      setError(null);      
-      
+      if (!supabaseConnection.isReady()) {
+        return this.handleOfflineAuth('signup', email, userData);
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            company_name: userData.companyName,
+            phone: userData.phone
+          },
+        }
+      });
+
+      if (error) throw error;
+
+      // Log de l'activité si possible
       try {
-        // Vérifier si nous avons des données en cache valides
-        if (isCacheValid(PROPERTIES_CACHE_KEY)) {
-          const cachedData = getCachedData<Property[]>(PROPERTIES_CACHE_KEY, []);
-          setProperties(cachedData);
-          
-          // Charger les données fraîches en arrière-plan
-          propertiesApi.getProperties().then(freshData => {
-            setProperties(freshData);
-            cacheData(PROPERTIES_CACHE_KEY, freshData);
-          }).catch(err => {
-            console.warn('Erreur lors du rafraîchissement des biens en arrière-plan:', err);
-          });
-        } else {
-          // Pas de cache valide, charger depuis l'API
-          const data = await propertiesApi.getProperties();
-          setProperties(data);
-          cacheData(PROPERTIES_CACHE_KEY, data);
-        }
-        
-        // Charger aussi les biens disponibles
-        if (isCacheValid(AVAILABLE_PROPERTIES_CACHE_KEY)) {
-          const cachedAvailableData = getCachedData<Property[]>(AVAILABLE_PROPERTIES_CACHE_KEY, []);
-          setAvailableProperties(cachedAvailableData);
-        } else {
-          const availableData = properties.filter(p => p.status === 'vacant' || p.status === 'maintenance');
-          setAvailableProperties(availableData);
-          cacheData(AVAILABLE_PROPERTIES_CACHE_KEY, availableData);
-        }
-      } catch (err) {
-        // Si l'erreur est liée à une connexion Supabase, utiliser les données de démonstration
-        const message = err?.message || '';
-        const status = err?.status || err?.code;
-        const numericStatus = typeof status === 'string' ? parseInt(status) : status;
-        
-        const isConnectionError = 
-          message.includes('Failed to fetch') || 
-          message.includes('timeout') ||
-          message.includes('upstream connect error') ||
-          message.includes('signal timed out') ||
-          message.includes('connection timeout') ||
-          message.includes('disconnect/reset before headers') ||
-          message.includes('connect error') ||
-          numericStatus === 503 ||
-          numericStatus === 500 ||
-          numericStatus === 544 ||
-          numericStatus === 23; // TimeoutError code
-        
-        if (isConnectionError) {
-          console.warn('Utilisation des données de démonstration pour les biens en raison d\'une erreur de connexion:', message);
-          
-          // Importer les données de démonstration
-          const { mockProperties } = await import('../data/mockData');
-          setProperties(mockProperties);
-          
-          // Filtrer les biens disponibles
-          const availableData = mockProperties.filter(p => p.status === 'vacant' || p.status === 'maintenance');
-          setAvailableProperties(availableData);
-          
-          // Définir un message d'erreur informatif
-          setError('Impossible de se connecter à la base de données. Affichage des données de démonstration.');
-        } else {
-          // Pour les autres types d'erreurs
-          setError(handleSupabaseError(err));
-          console.error('Erreur lors du chargement des biens:', err);
-        }
-      }
-    } catch (err) {
-      setError(handleSupabaseError(err));
-      console.error('Erreur lors du chargement des biens:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createProperty = async (propertyData: Omit<Property, 'id' | 'createdAt' | 'updatedAt'>) => {
-    try {
-      setError(null);
-      
-      // Invalider les caches
-      invalidateCache(PROPERTIES_CACHE_KEY);
-      invalidateCache(AVAILABLE_PROPERTIES_CACHE_KEY);
-      
-      const newProperty = await propertiesApi.createProperty(propertyData);
-      setProperties(prev => [newProperty, ...prev]);
-      
-      // Ajouter une activité
-      activityService.addActivity({
-        type: 'property',
-        action: 'created',
-        title: 'Nouveau bien ajouté',
-        description: `${newProperty.name} a été ajouté à votre portefeuille`,
-        entityId: newProperty.id,
-        entityType: 'property',
-        entityName: newProperty.name,
-        userId: 'current-user',
-        metadata: {
-          type: newProperty.type,
-          rent: newProperty.rent,
-          surface: newProperty.surface
-        },
-        priority: 'medium',
-        category: 'success'
-      });
-      
-      // Mettre à jour les biens disponibles si le nouveau bien est vacant
-      if (newProperty.status === 'vacant') {
-        setAvailableProperties(prev => [newProperty, ...prev]);
-      }
-    } catch (err) {
-      setError(handleSupabaseError(err));
-      throw err;
-    }
-  };
-
-  const updateProperty = async (id: string, propertyData: Partial<Property>) => {
-    try {
-      setError(null);
-      
-      // Invalider les caches
-      invalidateCache(PROPERTIES_CACHE_KEY);
-      invalidateCache(AVAILABLE_PROPERTIES_CACHE_KEY);
-      
-      const updatedProperty = await propertiesApi.updateProperty(id, propertyData);
-      setProperties(prev => prev.map(p => p.id === id ? updatedProperty : p));
-      
-      // Ajouter une activité
-      activityService.addActivity({
-        type: 'property',
-        action: 'updated',
-        title: 'Bien mis à jour',
-        description: `${updatedProperty.name} a été modifié`,
-        entityId: updatedProperty.id,
-        entityType: 'property',
-        entityName: updatedProperty.name,
-        userId: 'current-user',
-        metadata: propertyData,
-        priority: 'low',
-        category: 'info'
-      });
-      
-      // Mettre à jour les biens disponibles
-      if (updatedProperty.status === 'vacant') {
-        setAvailableProperties(prev => {
-          const exists = prev.find(p => p.id === id);
-          if (exists) {
-            return prev.map(p => p.id === id ? updatedProperty : p);
-          } else {
-            return [updatedProperty, ...prev];
-          }
-        });
-      } else {
-        setAvailableProperties(prev => prev.filter(p => p.id !== id));
-      }
-    } catch (err) {
-      setError(handleSupabaseError(err));
-      throw err;
-    }
-  };
-
-  const deleteProperty = async (id: string) => {
-    try {
-      setError(null);
-      
-      // Invalider les caches
-      invalidateCache(PROPERTIES_CACHE_KEY);
-      invalidateCache(AVAILABLE_PROPERTIES_CACHE_KEY);
-      
-      const propertyToDelete = properties.find(p => p.id === id);
-      await propertiesApi.deleteProperty(id);
-      setProperties(prev => prev.filter(p => p.id !== id));
-      setAvailableProperties(prev => prev.filter(p => p.id !== id));
-      
-      // Ajouter une activité
-      if (propertyToDelete) {
-        activityService.addActivity({
-          type: 'property',
-          action: 'deleted',
-          title: 'Bien supprimé',
-          description: `${propertyToDelete.name} a été supprimé de votre portefeuille`,
-          entityId: propertyToDelete.id,
-          entityType: 'property',
-          entityName: propertyToDelete.name,
-          userId: 'current-user',
+        await activityService.addActivity({
+          type: 'system',
+          action: 'user_signup',
+          title: 'Nouveau compte créé',
+          description: `Compte créé pour ${userData.firstName} ${userData.lastName}`,
+          userId: data.user?.id || 'unknown',
           priority: 'medium',
-          category: 'warning'
+          category: 'success'
         });
+      } catch (activityError) {
+        console.warn('Impossible de logger l\'activité:', activityError);
       }
-    } catch (err) {
-      setError(handleSupabaseError(err));
-      throw err;
+
+      return { data, error: null };
+    } catch (error) {
+      return this.handleAuthError(error, 'signup', email, userData);
     }
-  };
+  },
 
-  const refreshProperties = async () => {
-    await loadProperties();
-  };
+  // Connexion avec gestion d'erreur améliorée
+  async signIn(email: string, password: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.handleOfflineAuth('signin', email);
+      }
 
-  useEffect(() => {
-    loadProperties();
-  }, []);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-  return {
-    properties,
-    availableProperties,
-    loading,
-    error,
-    createProperty,
-    updateProperty,
-    deleteProperty,
-    refreshProperties
-  };
+      if (error) throw error;
+
+      // Log de l'activité si possible
+      try {
+        await activityService.addActivity({
+          type: 'login',
+          action: 'user_signin',
+          title: 'Connexion utilisateur',
+          description: `Connexion réussie pour ${email}`,
+          userId: data.user?.id || 'unknown',
+          priority: 'low',
+          category: 'info'
+        });
+      } catch (activityError) {
+        console.warn('Impossible de logger l\'activité:', activityError);
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return this.handleAuthError(error, 'signin', email);
+    }
+  },
+
+  // Déconnexion
+  async signOut() {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return { error: null };
+      }
+
+      const { error } = await supabase.auth.signOut();
+      return { error: error ? { message: error.message } : null };
+    } catch (error) {
+      console.warn('Erreur lors de la déconnexion:', error);
+      return { error: null }; // Toujours permettre la déconnexion locale
+    }
+  },
+
+  // Récupérer la session actuelle
+  async getSession() {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.getDemoSession();
+      }
+
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        // Gérer les erreurs de session invalide
+        if (error.message.includes('User from sub claim in JWT does not exist') ||
+            error.message.includes('Invalid Refresh Token')) {
+          await supabase.auth.signOut();
+          return { data: { session: null }, error: null };
+        }
+        throw error;
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      console.warn('Erreur lors de la récupération de session:', error);
+      return this.getDemoSession();
+    }
+  },
+
+  // Récupérer le profil utilisateur
+  async getProfile(userId: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        return this.getDemoProfile(userId);
+      }
+
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) throw sessionError;
+      
+      if (session?.session?.user.id === userId) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (error) throw error;
+        return { data, error: null };
+      }
+      
+      throw new Error('Utilisateur non trouvé');
+    } catch (error) {
+      console.warn('Erreur lors de la récupération du profil:', error);
+      return this.getDemoProfile(userId);
+    }
+  },
+
+  // Mettre à jour le profil
+  async updateProfile(userId: string, updates: Partial<AuthUser>) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - mise à jour du profil simulée');
+        return { data: { ...updates, id: userId }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  // Réinitialiser le mot de passe
+  async resetPassword(email: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - réinitialisation simulée');
+        return { data: {}, error: null };
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      return { data: {}, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  // Gestion de l'authentification hors ligne
+  handleOfflineAuth(operation: string, email: string, userData?: any) {
+    console.warn(`Mode hors ligne activé pour ${operation}`);
+    
+    const mockUser = {
+      id: 'demo-user-id',
+      email,
+      user_metadata: userData ? {
+        first_name: userData.firstName,
+        last_name: userData.lastName,
+        company_name: userData.companyName,
+        phone: userData.phone
+      } : {
+        first_name: 'Demo',
+        last_name: 'User'
+      }
+    };
+
+    return {
+      data: {
+        user: mockUser,
+        session: {
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh-token',
+          expires_at: Date.now() + 3600000
+        }
+      },
+      error: null
+    };
+  },
+
+  // Gestion des erreurs d'authentification
+  handleAuthError(error: any, operation: string, email?: string, userData?: any) {
+    const errorMessage = (error as Error).message;
+    
+    // Erreurs réseau - basculer en mode démo
+    if (errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('AbortError')) {
+      console.warn(`Erreur réseau lors de ${operation} - Mode démo activé`);
+      return this.handleOfflineAuth(operation, email || 'demo@example.com', userData);
+    }
+
+    // Autres erreurs - retourner l'erreur réelle
+    return {
+      data: { user: null, session: null },
+      error: { message: this.translateError(errorMessage) }
+    };
+  },
+
+  // Session démo
+  getDemoSession() {
+    return {
+      data: {
+        session: {
+          user: {
+            id: 'demo-user-id',
+            email: 'demo@example.com',
+            user_metadata: {
+              first_name: 'Demo',
+              last_name: 'User'
+            }
+          },
+          access_token: 'demo-token',
+          refresh_token: 'demo-refresh-token',
+          expires_at: Date.now() + 3600000
+        }
+      },
+      error: null
+    };
+  },
+
+  // Profil démo
+  getDemoProfile(userId: string) {
+    return {
+      data: {
+        id: userId,
+        email: 'demo@example.com',
+        first_name: 'Demo',
+        last_name: 'User',
+        company_name: 'Demo Company',
+        phone: '0123456789',
+        plan: 'starter',
+        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        subscription_status: 'trial',
+        role: 'user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      error: null
+    };
+  },
+
+  // Traduction des erreurs
+  translateError(message: string): string {
+    const translations: Record<string, string> = {
+      'Invalid login credentials': 'Email ou mot de passe incorrect',
+      'Email not confirmed': 'Veuillez confirmer votre email avant de vous connecter',
+      'Too many requests': 'Trop de tentatives. Veuillez réessayer dans quelques minutes',
+      'User already registered': 'Un compte avec cette adresse email existe déjà',
+      'Password should be at least': 'Le mot de passe doit contenir au moins 6 caractères',
+      'Invalid email': 'Format d\'email invalide'
+    };
+
+    for (const [key, value] of Object.entries(translations)) {
+      if (message.includes(key)) {
+        return value;
+      }
+    }
+
+    return message;
+  }
 };
+
+// Fonctions pour la gestion des abonnements
+export const subscription = {
+  async updatePlan(userId: string, plan: 'starter' | 'professional' | 'expert') {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - mise à jour du plan simulée');
+        return { data: { plan }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          plan,
+          subscription_status: 'active'
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  async extendTrial(userId: string, days: number = 14) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - extension d\'essai simulée');
+        return { data: { trial_ends_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }, error: null };
+      }
+
+      const newTrialEnd = new Date();
+      newTrialEnd.setDate(newTrialEnd.getDate() + days);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          trial_ends_at: newTrialEnd.toISOString()
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  },
+
+  async cancelSubscription(userId: string) {
+    try {
+      if (!supabaseConnection.isReady()) {
+        console.warn('Mode hors ligne - annulation simulée');
+        return { data: { subscription_status: 'cancelled' }, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          subscription_status: 'cancelled'
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: { message: (error as Error).message } };
+    }
+  }
+};
+
+// Fonction pour surveiller l'état de la connexion
+export const startConnectionMonitoring = () => {
+  setInterval(async () => {
+    const status = getConnectionStatus();
+    if (!status.connected && status.configured) {
+      console.log('Vérification de la reconnexion Supabase...');
+      await checkSupabaseConnection();
+    }
+  }, 60000); // Vérifier toutes les minutes
+};
+
+// Démarrer la surveillance automatiquement
+if (typeof window !== 'undefined') {
+  startConnectionMonitoring();
+}
