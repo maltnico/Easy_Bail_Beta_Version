@@ -56,7 +56,7 @@ interface AdminMenuProps {
 
 const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<string>('database');
+  const [activeTab, setActiveTab] = useState<string>('users');
   const [showEmailTemplateEditor, setShowEmailTemplateEditor] = useState(false);
   const [showMJMLTemplateEditor, setShowMJMLTemplateEditor] = useState(false);
   
@@ -89,7 +89,7 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
             </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Accès refusé</h2>
-                <p className="text-sm text-gray-600">Vue globale de tous les comptes utilisateurs</p>
+                <p className="text-sm text-gray-600">Administration système</p>
               </div>
             </div>
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
@@ -113,56 +113,23 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
   }
 
   const tabs = [
-    { id: 'dashboard', label: 'Tableau de bord', icon: BarChart3 },
-    { id: 'database', label: 'Base de données', icon: Database },
     { id: 'users', label: 'Utilisateurs', icon: Users },
     { id: 'security', label: 'Sécurité', icon: Shield },
-    { id: 'monitoring', label: 'Monitoring', icon: Activity },
-    { id: 'backup', label: 'Sauvegardes', icon: HardDrive },
     { id: 'mail', label: 'Serveur mail', icon: Mail },
     { id: 'email_templates', label: 'Templates mail', icon: Send },
     { id: 'email_queue', label: 'File d\'attente', icon: Mail },
-    { id: 'logs', label: 'Journaux', icon: Activity },
-    { id: 'local_docs', label: 'Documents locaux', icon: FileText },
-    { id: 'settings', label: 'Paramètres', icon: Settings }
+    { id: 'logs', label: 'Journaux', icon: Activity }
   ];
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'dashboard':
-        return (
-          <AdminDashboard />
-        );
-      case 'database':
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Connexion à la base de données</h3>
-            <SupabaseConnectionCheck />
-          </div>
-        );
       case 'users':
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Gestion des utilisateurs</h3>
-              <div className="text-sm text-gray-500">
-                Administration des comptes utilisateurs
-              </div>
-            </div>
-            <AdminUsers />
-          </div>
+          <AdminUsers />
         );
       case 'security':
         return (
           <AdminSecurity />
-        );
-      case 'monitoring':
-        return (
-          <AdminSystemMonitoring />
-        );
-      case 'backup':
-        return (
-          <AdminBackup />
         );
       case 'mail':
         return (
@@ -183,16 +150,8 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
         return (
           <AdminLogs />
         );
-      case 'local_docs':
-        return (
-          <LocalDocumentManager />
-        );
-      case 'settings':
-        return (
-          <AdminSettings />
-        );
       default:
-        return <AdminDashboard />;
+        return <AdminUsers />;
     }
   };
 

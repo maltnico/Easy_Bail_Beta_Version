@@ -663,37 +663,7 @@ const AdminUsers: React.FC = () => {
   };
   if (loading && users.length === 0) {
     return (
-      
-      <div className="overflow-x-auto mt-6">
-        <table className="min-w-full bg-white border border-gray-200">
-          <thead>
-            <tr className="bg-gray-100 text-left text-sm font-semibold text-gray-700">
-              <th className="px-4 py-2 border">Prénom</th>
-              <th className="px-4 py-2 border">Nom</th>
-              <th className="px-4 py-2 border">Email</th>
-              <th className="px-4 py-2 border">Entreprise</th>
-              <th className="px-4 py-2 border">Téléphone</th>
-              <th className="px-4 py-2 border">Abonnement</th>
-              <th className="px-4 py-2 border">Inscription</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="text-sm text-gray-800">
-                <td className="px-4 py-2 border">{user.first_name}</td>
-                <td className="px-4 py-2 border">{user.last_name}</td>
-                <td className="px-4 py-2 border">{user.email}</td>
-                <td className="px-4 py-2 border">{user.company_name || '-'}</td>
-                <td className="px-4 py-2 border">{user.phone || '-'}</td>
-                <td className="px-4 py-2 border">{user.plan}</td>
-                <td className="px-4 py-2 border">{new Date(user.created_at).toLocaleDateString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-<div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
