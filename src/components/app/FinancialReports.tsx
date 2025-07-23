@@ -1,589 +1,545 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../types/database';
-import { activityService } from '../../lib/activityService';
+import React, { useState, useEffect } from 'react';
+import { useFinances } from '../../hooks/useFinances';
+import { useProperties } from '../../hooks/data';
+import { useTenants } from '../../hooks/data';
+import { BarChart, PieChart, TrendingUp, TrendingDown, DollarSign, Calendar, Filter, Download, Eye } from 'lucide-react';
+import type { FinancialFlow } from '../../types/financial';
 
-// Types pour l'authentification
-export type AuthUser = {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  company_name?: string;
-  phone?: string;
-  plan: 'starter' | 'professional' | 'expert';
-  trial_ends_at: string;
-  subscription_status: 'trial' | 'active' | 'cancelled' | 'expired';
-  role?: 'user' | 'admin' | 'manager';
-  avatar_url?: string;
-  created_at: string;
-  updated_at: string;
-};
+interface ReportData {
+  totalIncome: number;
+  totalExpenses: number;
+  netIncome: number;
+  monthlyData: Array<{
+    month: string;
+    income: number;
+    expenses: number;
+    net: number;
+  }>;
+  categoryBreakdown: Array<{
+    category: string;
+    amount: number;
+    percentage: number;
+  }>;
+  propertyPerformance: Array<{
+    propertyName: string;
+    income: number;
+    expenses: number;
+    net: number;
+    roi: number;
+  }>;
+}
 
-// Configuration et état de la connexion
-class SupabaseConnection {
-  private client: any = null;
-  private isConfigured = false;
-  private isConnected = false;
-  private connectionAttempts = 0;
-  private maxRetries = 3;
-  private retryDelay = 2000;
-  private lastConnectionCheck = 0;
-  private connectionCheckInterval = 30000; // 30 secondes
+const FinancialReports: React.FC = () => {
+  const { flows, loading } = useFinances();
+  const { properties } = useProperties();
+  const { tenants } = useTenants();
+  
+  const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'quarter' | 'year'>('month');
+  const [selectedProperty, setSelectedProperty] = useState<string>('all');
+  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [activeView, setActiveView] = useState<'overview' | 'detailed' | 'charts'>('overview');
 
-  constructor() {
-    this.initialize();
-  }
-
-  private initialize() {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-    // Validation des variables d'environnement
-    this.isConfigured = this.validateConfig(supabaseUrl, supabaseAnonKey);
-
-    if (this.isConfigured) {
-      this.createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn('Configuration Supabase invalide - Mode démo activé');
+  useEffect(() => {
+    if (flows && flows.length > 0) {
+      generateReportData();
     }
-  }
+  }, [flows, selectedPeriod, selectedProperty]);
 
-  private validateConfig(url: string, key: string): boolean {
-    if (!url || !key) {
-      console.warn('Variables d\'environnement Supabase manquantes');
-      return false;
-    }
+  const generateReportData = () => {
+    if (!flows) return;
 
-    if (url.includes('your-project-id') || key.includes('your-anon-key')) {
-      console.warn('Variables d\'environnement Supabase contiennent des valeurs par défaut');
-      return false;
-    }
-
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      console.warn('URL Supabase invalide');
-      return false;
-    }
-  }
-
-  private createClient(url: string, key: string) {
-    this.client = createClient<Database>(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-      global: {
-        fetch: this.createFetchWrapper(),
-      },
+    const filteredFlows = flows.filter(flow => {
+      if (selectedProperty !== 'all' && flow.property_id !== selectedProperty) {
+        return false;
+      }
+      
+      const flowDate = new Date(flow.date);
+      const now = new Date();
+      
+      switch (selectedPeriod) {
+        case 'month':
+          return flowDate.getMonth() === now.getMonth() && 
+                 flowDate.getFullYear() === now.getFullYear();
+        case 'quarter':
+          const currentQuarter = Math.floor(now.getMonth() / 3);
+          const flowQuarter = Math.floor(flowDate.getMonth() / 3);
+          return flowQuarter === currentQuarter && 
+                 flowDate.getFullYear() === now.getFullYear();
+        case 'year':
+          return flowDate.getFullYear() === now.getFullYear();
+        default:
+          return true;
+      }
     });
-  }
 
-  private createFetchWrapper() {
-    return async (url: string, options: any = {}) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const totalIncome = filteredFlows
+      .filter(f => f.type === 'income')
+      .reduce((sum, f) => sum + f.amount, 0);
+    
+    const totalExpenses = filteredFlows
+      .filter(f => f.type === 'expense')
+      .reduce((sum, f) => sum + f.amount, 0);
 
-      try {
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        
-        // Marquer comme connecté si la requête réussit
-        if (response.ok) {
-          this.isConnected = true;
-          this.connectionAttempts = 0;
-        }
-
-        return response;
-      } catch (error) {
-        clearTimeout(timeoutId);
-        this.handleConnectionError(error);
-        throw error;
-      }
-    };
-  }
-
-  private handleConnectionError(error: any) {
-    const isNetworkError = 
-      error.name === 'AbortError' ||
-      error.name === 'TimeoutError' ||
-      error.message?.includes('Failed to fetch') ||
-      error.message?.includes('NetworkError') ||
-      error.message?.includes('timeout');
-
-    if (isNetworkError) {
-      this.isConnected = false;
-      this.connectionAttempts++;
+    // Generate monthly data for the last 12 months
+    const monthlyData = [];
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
-      if (this.connectionAttempts <= this.maxRetries) {
-        console.warn(`Tentative de reconnexion ${this.connectionAttempts}/${this.maxRetries}`);
-        setTimeout(() => this.attemptReconnection(), this.retryDelay * this.connectionAttempts);
-      } else {
-        console.warn('Nombre maximum de tentatives de reconnexion atteint');
-      }
-    }
-  }
-
-  private async attemptReconnection() {
-    try {
-      const connected = await this.checkConnection();
-      if (connected) {
-        console.log('Reconnexion Supabase réussie');
-        this.isConnected = true;
-        this.connectionAttempts = 0;
-      }
-    } catch (error) {
-      console.warn('Échec de la reconnexion:', error);
-    }
-  }
-
-  async checkConnection(): Promise<boolean> {
-    if (!this.isConfigured || !this.client) return false;
-
-    const now = Date.now();
-    if (now - this.lastConnectionCheck < this.connectionCheckInterval) {
-      return this.isConnected;
-    }
-
-    try {
-      const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
-      this.isConnected = !error;
-      this.lastConnectionCheck = now;
-      return this.isConnected;
-    } catch (error) {
-      this.isConnected = false;
-      this.lastConnectionCheck = now;
-      return false;
-    }
-  }
-
-  getClient() {
-    return this.client;
-  }
-
-  isReady(): boolean {
-    return this.isConfigured && this.isConnected;
-  }
-
-  getConnectionStatus() {
-    return {
-      configured: this.isConfigured,
-      connected: this.isConnected,
-      attempts: this.connectionAttempts,
-    };
-  }
-}
-
-// Instance singleton de la connexion
-const supabaseConnection = new SupabaseConnection();
-export const supabase = supabaseConnection.getClient();
-
-// Fonctions utilitaires
-export const checkSupabaseConnection = () => supabaseConnection.checkConnection();
-export const isConnected = () => supabaseConnection.isReady();
-export const getConnectionStatus = () => supabaseConnection.getConnectionStatus();
-
-// Service d'authentification amélioré
-export const auth = {
-  // Inscription avec gestion d'erreur améliorée
-  async signUp(email: string, password: string, userData: {
-    firstName: string;
-    lastName: string;
-    companyName?: string;
-    phone?: string;
-  }) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.handleOfflineAuth('signup', email, userData);
-      }
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            company_name: userData.companyName,
-            phone: userData.phone
-          },
-        }
+      const monthFlows = flows.filter(f => {
+        const flowDate = new Date(f.date);
+        return flowDate.getFullYear() === date.getFullYear() && 
+               flowDate.getMonth() === date.getMonth();
       });
 
-      if (error) throw error;
+      const income = monthFlows
+        .filter(f => f.type === 'income')
+        .reduce((sum, f) => sum + f.amount, 0);
+      
+      const expenses = monthFlows
+        .filter(f => f.type === 'expense')
+        .reduce((sum, f) => sum + f.amount, 0);
 
-      // Log de l'activité si possible
-      try {
-        await activityService.addActivity({
-          type: 'system',
-          action: 'user_signup',
-          title: 'Nouveau compte créé',
-          description: `Compte créé pour ${userData.firstName} ${userData.lastName}`,
-          userId: data.user?.id || 'unknown',
-          priority: 'medium',
-          category: 'success'
-        });
-      } catch (activityError) {
-        console.warn('Impossible de logger l\'activité:', activityError);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return this.handleAuthError(error, 'signup', email, userData);
-    }
-  },
-
-  // Connexion avec gestion d'erreur améliorée
-  async signIn(email: string, password: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.handleOfflineAuth('signin', email);
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      monthlyData.push({
+        month: date.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }),
+        income,
+        expenses,
+        net: income - expenses
       });
-
-      if (error) throw error;
-
-      // Log de l'activité si possible
-      try {
-        await activityService.addActivity({
-          type: 'login',
-          action: 'user_signin',
-          title: 'Connexion utilisateur',
-          description: `Connexion réussie pour ${email}`,
-          userId: data.user?.id || 'unknown',
-          priority: 'low',
-          category: 'info'
-        });
-      } catch (activityError) {
-        console.warn('Impossible de logger l\'activité:', activityError);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return this.handleAuthError(error, 'signin', email);
     }
-  },
 
-  // Déconnexion
-  async signOut() {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return { error: null };
-      }
+    // Category breakdown
+    const categoryMap = new Map<string, number>();
+    filteredFlows.forEach(flow => {
+      const current = categoryMap.get(flow.category) || 0;
+      categoryMap.set(flow.category, current + flow.amount);
+    });
 
-      const { error } = await supabase.auth.signOut();
-      return { error: error ? { message: error.message } : null };
-    } catch (error) {
-      console.warn('Erreur lors de la déconnexion:', error);
-      return { error: null }; // Toujours permettre la déconnexion locale
-    }
-  },
+    const categoryBreakdown = Array.from(categoryMap.entries())
+      .map(([category, amount]) => ({
+        category,
+        amount,
+        percentage: (amount / (totalIncome + totalExpenses)) * 100
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
-  // Récupérer la session actuelle
-  async getSession() {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.getDemoSession();
-      }
+    // Property performance
+    const propertyPerformance = properties?.map(property => {
+      const propertyFlows = filteredFlows.filter(f => f.property_id === property.id);
+      const income = propertyFlows
+        .filter(f => f.type === 'income')
+        .reduce((sum, f) => sum + f.amount, 0);
+      const expenses = propertyFlows
+        .filter(f => f.type === 'expense')  
+        .reduce((sum, f) => sum + f.amount, 0);
+      const net = income - expenses;
+      const roi = income > 0 ? (net / income) * 100 : 0;
 
-      const { data, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        // Gérer les erreurs de session invalide
-        if (error.message.includes('User from sub claim in JWT does not exist') ||
-            error.message.includes('Invalid Refresh Token')) {
-          await supabase.auth.signOut();
-          return { data: { session: null }, error: null };
-        }
-        throw error;
-      }
+      return {
+        propertyName: property.name,
+        income,
+        expenses,
+        net,
+        roi
+      };
+    }).filter(p => p.income > 0 || p.expenses > 0) || [];
 
-      return { data, error: null };
-    } catch (error) {
-      console.warn('Erreur lors de la récupération de session:', error);
-      return this.getDemoSession();
-    }
-  },
+    setReportData({
+      totalIncome,
+      totalExpenses,
+      netIncome: totalIncome - totalExpenses,
+      monthlyData,
+      categoryBreakdown,
+      propertyPerformance
+    });
+  };
 
-  // Récupérer le profil utilisateur
-  async getProfile(userId: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.getDemoProfile(userId);
-      }
-
-      const { data: session, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) throw sessionError;
-      
-      if (session?.session?.user.id === userId) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-        
-        if (error) throw error;
-        return { data, error: null };
-      }
-      
-      throw new Error('Utilisateur non trouvé');
-    } catch (error) {
-      console.warn('Erreur lors de la récupération du profil:', error);
-      return this.getDemoProfile(userId);
-    }
-  },
-
-  // Mettre à jour le profil
-  async updateProfile(userId: string, updates: Partial<AuthUser>) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - mise à jour du profil simulée');
-        return { data: { ...updates, id: userId }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  // Réinitialiser le mot de passe
-  async resetPassword(email: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - réinitialisation simulée');
-        return { data: {}, error: null };
-      }
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
-      return { data: {}, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  // Gestion de l'authentification hors ligne
-  handleOfflineAuth(operation: string, email: string, userData?: any) {
-    console.warn(`Mode hors ligne activé pour ${operation}`);
+  const exportReport = () => {
+    if (!reportData) return;
     
-    const mockUser = {
-      id: 'demo-user-id',
-      email,
-      user_metadata: userData ? {
-        first_name: userData.firstName,
-        last_name: userData.lastName,
-        company_name: userData.companyName,
-        phone: userData.phone
-      } : {
-        first_name: 'Demo',
-        last_name: 'User'
-      }
-    };
+    const csvContent = [
+      ['Période', selectedPeriod],
+      ['Propriété', selectedProperty === 'all' ? 'Toutes' : properties?.find(p => p.id === selectedProperty)?.name || 'Inconnue'],
+      [''],
+      ['Revenus totaux', reportData.totalIncome.toFixed(2) + '€'],
+      ['Dépenses totales', reportData.totalExpenses.toFixed(2) + '€'],
+      ['Résultat net', reportData.netIncome.toFixed(2) + '€'],
+      [''],
+      ['Données mensuelles'],
+      ['Mois', 'Revenus', 'Dépenses', 'Net'],
+      ...reportData.monthlyData.map(m => [m.month, m.income.toFixed(2), m.expenses.toFixed(2), m.net.toFixed(2)])
+    ].map(row => row.join(',')).join('\n');
 
-    return {
-      data: {
-        user: mockUser,
-        session: {
-          access_token: 'demo-token',
-          refresh_token: 'demo-refresh-token',
-          expires_at: Date.now() + 3600000
-        }
-      },
-      error: null
-    };
-  },
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `rapport-financier-${selectedPeriod}-${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
-  // Gestion des erreurs d'authentification
-  handleAuthError(error: any, operation: string, email?: string, userData?: any) {
-    const errorMessage = (error as Error).message;
-    
-    // Erreurs réseau - basculer en mode démo
-    if (errorMessage.includes('Failed to fetch') ||
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('NetworkError') ||
-        errorMessage.includes('AbortError')) {
-      console.warn(`Erreur réseau lors de ${operation} - Mode démo activé`);
-      return this.handleOfflineAuth(operation, email || 'demo@example.com', userData);
-    }
-
-    // Autres erreurs - retourner l'erreur réelle
-    return {
-      data: { user: null, session: null },
-      error: { message: this.translateError(errorMessage) }
-    };
-  },
-
-  // Session démo
-  getDemoSession() {
-    return {
-      data: {
-        session: {
-          user: {
-            id: 'demo-user-id',
-            email: 'demo@example.com',
-            user_metadata: {
-              first_name: 'Demo',
-              last_name: 'User'
-            }
-          },
-          access_token: 'demo-token',
-          refresh_token: 'demo-refresh-token',
-          expires_at: Date.now() + 3600000
-        }
-      },
-      error: null
-    };
-  },
-
-  // Profil démo
-  getDemoProfile(userId: string) {
-    return {
-      data: {
-        id: userId,
-        email: 'demo@example.com',
-        first_name: 'Demo',
-        last_name: 'User',
-        company_name: 'Demo Company',
-        phone: '0123456789',
-        plan: 'starter',
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        subscription_status: 'trial',
-        role: 'user',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      error: null
-    };
-  },
-
-  // Traduction des erreurs
-  translateError(message: string): string {
-    const translations: Record<string, string> = {
-      'Invalid login credentials': 'Email ou mot de passe incorrect',
-      'Email not confirmed': 'Veuillez confirmer votre email avant de vous connecter',
-      'Too many requests': 'Trop de tentatives. Veuillez réessayer dans quelques minutes',
-      'User already registered': 'Un compte avec cette adresse email existe déjà',
-      'Password should be at least': 'Le mot de passe doit contenir au moins 6 caractères',
-      'Invalid email': 'Format d\'email invalide'
-    };
-
-    for (const [key, value] of Object.entries(translations)) {
-      if (message.includes(key)) {
-        return value;
-      }
-    }
-
-    return message;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
   }
-};
 
-// Fonctions pour la gestion des abonnements
-export const subscription = {
-  async updatePlan(userId: string, plan: 'starter' | 'professional' | 'expert') {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - mise à jour du plan simulée');
-        return { data: { plan }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          plan,
-          subscription_status: 'active'
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  async extendTrial(userId: string, days: number = 14) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - extension d\'essai simulée');
-        return { data: { trial_ends_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }, error: null };
-      }
-
-      const newTrialEnd = new Date();
-      newTrialEnd.setDate(newTrialEnd.getDate() + days);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          trial_ends_at: newTrialEnd.toISOString()
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  async cancelSubscription(userId: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - annulation simulée');
-        return { data: { subscription_status: 'cancelled' }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          subscription_status: 'cancelled'
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
+  if (!reportData) {
+    return (
+      <div className="text-center py-12">
+        <BarChart className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-sm font-medium text-gray-900">Aucune donnée financière</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Commencez par ajouter des flux financiers pour générer des rapports.
+        </p>
+      </div>
+    );
   }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Rapports Financiers</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Analyse détaillée de vos performances financières
+          </p>
+        </div>
+        <div className="mt-4 sm:mt-0 flex space-x-3">
+          <button
+            onClick={exportReport}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Exporter
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-lg border border-gray-200">
+        <div className="flex flex-wrap gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Période
+            </label>
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value as any)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="month">Ce mois</option>
+              <option value="quarter">Ce trimestre</option>
+              <option value="year">Cette année</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Propriété
+            </label>
+            <select
+              value={selectedProperty}
+              onChange={(e) => setSelectedProperty(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="all">Toutes les propriétés</option>
+              {properties?.map((property) => (
+                <option key={property.id} value={property.id}>
+                  {property.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* View Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          {[
+            { id: 'overview', name: 'Vue d\'ensemble', icon: Eye },
+            { id: 'detailed', name: 'Détaillé', icon: BarChart },
+            { id: 'charts', name: 'Graphiques', icon: PieChart }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveView(tab.id as any)}
+              className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
+                activeView === tab.id
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <tab.icon className="h-4 w-4 mr-2" />
+              {tab.name}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Content */}
+      {activeView === 'overview' && (
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <TrendingUp className="h-6 w-6 text-green-400" />
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">
+                        Revenus totaux
+                      </dt>
+                      <dd className="text-lg font-medium text-gray-900">
+                        {reportData.totalIncome.toLocaleString('fr-FR', {
+                          style: 'currency',
+                          currency: 'EUR'
+                        })}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <TrendingDown className="h-6 w-6 text-red-400" />
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">
+                        Dépenses totales
+                      </dt>
+                      <dd className="text-lg font-medium text-gray-900">
+                        {reportData.totalExpenses.toLocaleString('fr-FR', {
+                          style: 'currency',
+                          currency: 'EUR'
+                        })}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <DollarSign
+                      className={`h-6 w-6 ${
+                        reportData.netIncome >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}
+                    />
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">
+                        Résultat net
+                      </dt>
+                      <dd className={`text-lg font-medium ${
+                        reportData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {reportData.netIncome.toLocaleString('fr-FR', {
+                          style: 'currency',
+                          currency: 'EUR'
+                        })}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Property Performance */}
+          {reportData.propertyPerformance.length > 0 && (
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                  Performance par propriété
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Propriété
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Revenus
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Dépenses
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Net
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          ROI
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {reportData.propertyPerformance.map((property, index) => (
+                        <tr key={index}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {property.propertyName}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                            {property.income.toLocaleString('fr-FR', {
+                              style: 'currency',
+                              currency: 'EUR'
+                            })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                            {property.expenses.toLocaleString('fr-FR', {
+                              style: 'currency',
+                              currency: 'EUR'
+                            })}
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                            property.net >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {property.net.toLocaleString('fr-FR', {
+                              style: 'currency',
+                              currency: 'EUR'
+                            })}
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                            property.roi >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {property.roi.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeView === 'detailed' && (
+        <div className="space-y-6">
+          {/* Monthly Breakdown */}
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Évolution mensuelle
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Mois
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Revenus
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Dépenses
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Net
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {reportData.monthlyData.map((month, index) => (
+                      <tr key={index}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {month.month}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                          {month.income.toLocaleString('fr-FR', {
+                            style: 'currency',
+                            currency: 'EUR'
+                          })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                          {month.expenses.toLocaleString('fr-FR', {
+                            style: 'currency',
+                            currency: 'EUR'
+                          })}
+                        </td>
+                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                          month.net >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {month.net.toLocaleString('fr-FR', {
+                            style: 'currency',
+                            currency: 'EUR'
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Category Breakdown */}
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Répartition par catégorie
+              </h3>
+              <div className="space-y-3">
+                {reportData.categoryBreakdown.map((category, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 w-4 h-4 rounded-full bg-indigo-500 mr-3"></div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {category.category}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-500">
+                        {category.percentage.toFixed(1)}%
+                      </span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {category.amount.toLocaleString('fr-FR', {
+                          style: 'currency',
+                          currency: 'EUR'
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeView === 'charts' && (
+        <div className="text-center py-12">
+          <PieChart className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">Graphiques bientôt disponibles</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Les graphiques interactifs seront ajoutés dans une prochaine version.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 };
 
-// Fonction pour surveiller l'état de la connexion
-export const startConnectionMonitoring = () => {
-  setInterval(async () => {
-    const status = getConnectionStatus();
-    if (!status.connected && status.configured) {
-      console.log('Vérification de la reconnexion Supabase...');
-      await checkSupabaseConnection();
-    }
-  }, 60000); // Vérifier toutes les minutes
-};
-
-// Démarrer la surveillance automatiquement
-if (typeof window !== 'undefined') {
-  startConnectionMonitoring();
-}
+export default FinancialReports;
