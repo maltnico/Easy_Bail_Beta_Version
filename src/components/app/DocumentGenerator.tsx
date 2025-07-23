@@ -28,7 +28,6 @@ import DocumentViewer from './DocumentViewer';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 const DocumentGenerator = () => {
   const { properties } = useProperties();

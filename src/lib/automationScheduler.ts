@@ -2,8 +2,6 @@ import { supabase } from './supabase';
 import { automationService } from './automationService';
 import { localEmailService } from './localEmailService';
 import { Automation } from '../types';
-import { formatISO } from 'date-fns';
-import { fr } from 'date-fns/locale';
 
 /**
  * Service pour gérer les exécutions programmées des automatisations

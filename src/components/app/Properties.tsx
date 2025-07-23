@@ -4,8 +4,6 @@ import {
   Plus, 
   Search, 
   Filter,
-  Grid3X3,
-  List,
   Eye,
   Edit,
   Trash2,

@@ -2,8 +2,6 @@ import React from 'react';
 import { 
   Search, 
   Filter, 
-  SortAsc, 
-  SortDesc, 
   Grid3X3, 
   List,
   X

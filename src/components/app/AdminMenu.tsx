@@ -5,8 +5,6 @@ import {
   Users, 
   Shield, 
   Activity,
-  Mail,
-  Send,
   X,
   ChevronRight,
   BarChart3,

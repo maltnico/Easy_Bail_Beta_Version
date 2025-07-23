@@ -13,10 +13,8 @@ import {
 } from 'lucide-react';
 import { GeneratedDocument } from '../../types/documents';
 import { usePDF } from 'react-to-pdf';
-import { saveAs } from 'file-saver';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import { saveAs } from 'file-saver';
 
 interface DocumentViewerProps {
   document: GeneratedDocument;
