@@ -1,589 +1,223 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../types/database';
-import { activityService } from './activityService';
+import React, { useState, useEffect } from 'react';
+import { 
+  Home, 
+  Users, 
+  FileText,
+  DollarSign,
+  AlertTriangle,
+  TrendingUp,
+  Calendar,
+  Clock
+} from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
+import { useDatabase } from '../../hooks/useDatabase';
 
-// Types pour l'authentification
-export type AuthUser = {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  company_name?: string;
-  phone?: string;
-  plan: 'starter' | 'professional' | 'expert';
-  trial_ends_at: string;
-  subscription_status: 'trial' | 'active' | 'cancelled' | 'expired';
-  role?: 'user' | 'admin' | 'manager';
-  avatar_url?: string;
-  created_at: string;
-  updated_at: string;
-};
+interface DashboardProps {
+  setActiveTab: (tab: string) => void;
+}
 
-// Configuration et état de la connexion
-class SupabaseConnection {
-  private client: any = null;
-  private isConfigured = false;
-  private isConnected = false;
-  private connectionAttempts = 0;
-  private maxRetries = 3;
-  private retryDelay = 2000;
-  private lastConnectionCheck = 0;
-  private connectionCheckInterval = 30000; // 30 secondes
+const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
+  const { user } = useAuth();
+  const { isConnected } = useDatabase();
+  const [stats, setStats] = useState({
+    properties: 0,
+    tenants: 0,
+    documents: 0,
+    revenue: 0
+  });
 
-  constructor() {
-    this.initialize();
-  }
+  useEffect(() => {
+    // Charger les statistiques
+    loadDashboardStats();
+  }, []);
 
-  private initialize() {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-    // Validation des variables d'environnement
-    this.isConfigured = this.validateConfig(supabaseUrl, supabaseAnonKey);
-
-    if (this.isConfigured) {
-      this.createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn('Configuration Supabase invalide - Mode démo activé');
-    }
-  }
-
-  private validateConfig(url: string, key: string): boolean {
-    if (!url || !key) {
-      console.warn('Variables d\'environnement Supabase manquantes');
-      return false;
-    }
-
-    if (url.includes('your-project-id') || key.includes('your-anon-key')) {
-      console.warn('Variables d\'environnement Supabase contiennent des valeurs par défaut');
-      return false;
-    }
-
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      console.warn('URL Supabase invalide');
-      return false;
-    }
-  }
-
-  private createClient(url: string, key: string) {
-    this.client = createClient<Database>(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-      global: {
-        fetch: this.createFetchWrapper(),
-      },
+  const loadDashboardStats = async () => {
+    // Simuler le chargement des stats
+    setStats({
+      properties: 12,
+      tenants: 28,
+      documents: 156,
+      revenue: 45250
     });
-  }
+  };
 
-  private createFetchWrapper() {
-    return async (url: string, options: any = {}) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      try {
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        
-        // Marquer comme connecté si la requête réussit
-        if (response.ok) {
-          this.isConnected = true;
-          this.connectionAttempts = 0;
-        }
-
-        return response;
-      } catch (error) {
-        clearTimeout(timeoutId);
-        this.handleConnectionError(error);
-        throw error;
-      }
-    };
-  }
-
-  private handleConnectionError(error: any) {
-    const isNetworkError = 
-      error.name === 'AbortError' ||
-      error.name === 'TimeoutError' ||
-      error.message?.includes('Failed to fetch') ||
-      error.message?.includes('NetworkError') ||
-      error.message?.includes('timeout');
-
-    if (isNetworkError) {
-      this.isConnected = false;
-      this.connectionAttempts++;
-      
-      if (this.connectionAttempts <= this.maxRetries) {
-        console.warn(`Tentative de reconnexion ${this.connectionAttempts}/${this.maxRetries}`);
-        setTimeout(() => this.attemptReconnection(), this.retryDelay * this.connectionAttempts);
-      } else {
-        console.warn('Nombre maximum de tentatives de reconnexion atteint');
-      }
+  const quickActions = [
+    {
+      title: 'Ajouter un bien',
+      description: 'Créer une nouvelle propriété',
+      icon: Home,
+      action: () => setActiveTab('properties'),
+      color: 'bg-blue-500'
+    },
+    {
+      title: 'Nouveau locataire',
+      description: 'Enregistrer un locataire',
+      icon: Users,
+      action: () => setActiveTab('tenants'),
+      color: 'bg-green-500'
+    },
+    {
+      title: 'Générer document',
+      description: 'Créer un contrat ou état des lieux',
+      icon: FileText,
+      action: () => setActiveTab('documents'),
+      color: 'bg-purple-500'
+    },
+    {
+      title: 'Finances',
+      description: 'Voir les revenus et dépenses',
+      icon: DollarSign,
+      action: () => setActiveTab('finances'),
+      color: 'bg-yellow-500'
     }
-  }
+  ];
 
-  private async attemptReconnection() {
-    try {
-      const connected = await this.checkConnection();
-      if (connected) {
-        console.log('Reconnexion Supabase réussie');
-        this.isConnected = true;
-        this.connectionAttempts = 0;
-      }
-    } catch (error) {
-      console.warn('Échec de la reconnexion:', error);
+  const recentActivities = [
+    {
+      id: 1,
+      type: 'property',
+      title: 'Nouveau bien ajouté',
+      description: 'Appartement 3 pièces - 15 rue de la Paix',
+      time: '2 heures',
+      icon: Home
+    },
+    {
+      id: 2,
+      type: 'tenant',
+      title: 'Locataire enregistré',
+      description: 'Marie Dubois - Appartement A12',
+      time: '4 heures',
+      icon: Users
+    },
+    {
+      id: 3,
+      type: 'document',
+      title: 'Contrat généré',
+      description: 'Bail commercial - Local rue du Commerce',
+      time: '1 jour',
+      icon: FileText
     }
-  }
+  ];
 
-  async checkConnection(): Promise<boolean> {
-    if (!this.isConfigured || !this.client) return false;
+  return (
+    <div className="p-6 space-y-6">
+      {/* En-tête du tableau de bord */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Bonjour, {user?.first_name} !
+          </h1>
+          <p className="text-gray-600">
+            Voici un aperçu de votre activité de gestion locative
+          </p>
+        </div>
+        <div className="flex items-center space-x-2">
+          {!isConnected && (
+            <div className="flex items-center px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
+              <AlertTriangle className="w-4 h-4 mr-1" />
+              Mode hors ligne
+            </div>
+          )}
+        </div>
+      </div>
 
-    const now = Date.now();
-    if (now - this.lastConnectionCheck < this.connectionCheckInterval) {
-      return this.isConnected;
-    }
+      {/* Statistiques principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Propriétés</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.properties}</p>
+            </div>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Home className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
 
-    try {
-      const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
-      this.isConnected = !error;
-      this.lastConnectionCheck = now;
-      return this.isConnected;
-    } catch (error) {
-      this.isConnected = false;
-      this.lastConnectionCheck = now;
-      return false;
-    }
-  }
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Locataires</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.tenants}</p>
+            </div>
+            <div className="p-3 bg-green-100 rounded-lg">
+              <Users className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </div>
 
-  getClient() {
-    return this.client;
-  }
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Documents</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.documents}</p>
+            </div>
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <FileText className="w-6 h-6 text-purple-600" />
+            </div>
+          </div>
+        </div>
 
-  isReady(): boolean {
-    return this.isConfigured && this.isConnected;
-  }
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Revenus (€)</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.revenue.toLocaleString()}</p>
+            </div>
+            <div className="p-3 bg-yellow-100 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-yellow-600" />
+            </div>
+          </div>
+        </div>
+      </div>
 
-  getConnectionStatus() {
-    return {
-      configured: this.isConfigured,
-      connected: this.isConnected,
-      attempts: this.connectionAttempts,
-    };
-  }
-}
+      {/* Actions rapides */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {quickActions.map((action, index) => (
+          <button
+            key={index}
+            onClick={action.action}
+            className="p-4 bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center space-x-3">
+              <div className={`p-2 ${action.color} rounded-lg`}>
+                <action.icon className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="font-medium text-gray-900">{action.title}</p>
+                <p className="text-sm text-gray-600">{action.description}</p>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
 
-// Instance singleton de la connexion
-const supabaseConnection = new SupabaseConnection();
-export const supabase = supabaseConnection.getClient();
-
-// Fonctions utilitaires
-export const checkSupabaseConnection = () => supabaseConnection.checkConnection();
-export const isConnected = () => supabaseConnection.isReady();
-export const getConnectionStatus = () => supabaseConnection.getConnectionStatus();
-
-// Service d'authentification amélioré
-export const auth = {
-  // Inscription avec gestion d'erreur améliorée
-  async signUp(email: string, password: string, userData: {
-    firstName: string;
-    lastName: string;
-    companyName?: string;
-    phone?: string;
-  }) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.handleOfflineAuth('signup', email, userData);
-      }
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            company_name: userData.companyName,
-            phone: userData.phone
-          },
-        }
-      });
-
-      if (error) throw error;
-
-      // Log de l'activité si possible
-      try {
-        await activityService.addActivity({
-          type: 'system',
-          action: 'user_signup',
-          title: 'Nouveau compte créé',
-          description: `Compte créé pour ${userData.firstName} ${userData.lastName}`,
-          userId: data.user?.id || 'unknown',
-          priority: 'medium',
-          category: 'success'
-        });
-      } catch (activityError) {
-        console.warn('Impossible de logger l\'activité:', activityError);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return this.handleAuthError(error, 'signup', email, userData);
-    }
-  },
-
-  // Connexion avec gestion d'erreur améliorée
-  async signIn(email: string, password: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.handleOfflineAuth('signin', email);
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) throw error;
-
-      // Log de l'activité si possible
-      try {
-        await activityService.addActivity({
-          type: 'login',
-          action: 'user_signin',
-          title: 'Connexion utilisateur',
-          description: `Connexion réussie pour ${email}`,
-          userId: data.user?.id || 'unknown',
-          priority: 'low',
-          category: 'info'
-        });
-      } catch (activityError) {
-        console.warn('Impossible de logger l\'activité:', activityError);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return this.handleAuthError(error, 'signin', email);
-    }
-  },
-
-  // Déconnexion
-  async signOut() {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return { error: null };
-      }
-
-      const { error } = await supabase.auth.signOut();
-      return { error: error ? { message: error.message } : null };
-    } catch (error) {
-      console.warn('Erreur lors de la déconnexion:', error);
-      return { error: null }; // Toujours permettre la déconnexion locale
-    }
-  },
-
-  // Récupérer la session actuelle
-  async getSession() {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.getDemoSession();
-      }
-
-      const { data, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        // Gérer les erreurs de session invalide
-        if (error.message.includes('User from sub claim in JWT does not exist') ||
-            error.message.includes('Invalid Refresh Token')) {
-          await supabase.auth.signOut();
-          return { data: { session: null }, error: null };
-        }
-        throw error;
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      console.warn('Erreur lors de la récupération de session:', error);
-      return this.getDemoSession();
-    }
-  },
-
-  // Récupérer le profil utilisateur
-  async getProfile(userId: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.getDemoProfile(userId);
-      }
-
-      const { data: session, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) throw sessionError;
-      
-      if (session?.session?.user.id === userId) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-        
-        if (error) throw error;
-        return { data, error: null };
-      }
-      
-      throw new Error('Utilisateur non trouvé');
-    } catch (error) {
-      console.warn('Erreur lors de la récupération du profil:', error);
-      return this.getDemoProfile(userId);
-    }
-  },
-
-  // Mettre à jour le profil
-  async updateProfile(userId: string, updates: Partial<AuthUser>) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - mise à jour du profil simulée');
-        return { data: { ...updates, id: userId }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  // Réinitialiser le mot de passe
-  async resetPassword(email: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - réinitialisation simulée');
-        return { data: {}, error: null };
-      }
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
-      return { data: {}, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  // Gestion de l'authentification hors ligne
-  handleOfflineAuth(operation: string, email: string, userData?: any) {
-    console.warn(`Mode hors ligne activé pour ${operation}`);
-    
-    const mockUser = {
-      id: 'demo-user-id',
-      email,
-      user_metadata: userData ? {
-        first_name: userData.firstName,
-        last_name: userData.lastName,
-        company_name: userData.companyName,
-        phone: userData.phone
-      } : {
-        first_name: 'Demo',
-        last_name: 'User'
-      }
-    };
-
-    return {
-      data: {
-        user: mockUser,
-        session: {
-          access_token: 'demo-token',
-          refresh_token: 'demo-refresh-token',
-          expires_at: Date.now() + 3600000
-        }
-      },
-      error: null
-    };
-  },
-
-  // Gestion des erreurs d'authentification
-  handleAuthError(error: any, operation: string, email?: string, userData?: any) {
-    const errorMessage = (error as Error).message;
-    
-    // Erreurs réseau - basculer en mode démo
-    if (errorMessage.includes('Failed to fetch') ||
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('NetworkError') ||
-        errorMessage.includes('AbortError')) {
-      console.warn(`Erreur réseau lors de ${operation} - Mode démo activé`);
-      return this.handleOfflineAuth(operation, email || 'demo@example.com', userData);
-    }
-
-    // Autres erreurs - retourner l'erreur réelle
-    return {
-      data: { user: null, session: null },
-      error: { message: this.translateError(errorMessage) }
-    };
-  },
-
-  // Session démo
-  getDemoSession() {
-    return {
-      data: {
-        session: {
-          user: {
-            id: 'demo-user-id',
-            email: 'demo@example.com',
-            user_metadata: {
-              first_name: 'Demo',
-              last_name: 'User'
-            }
-          },
-          access_token: 'demo-token',
-          refresh_token: 'demo-refresh-token',
-          expires_at: Date.now() + 3600000
-        }
-      },
-      error: null
-    };
-  },
-
-  // Profil démo
-  getDemoProfile(userId: string) {
-    return {
-      data: {
-        id: userId,
-        email: 'demo@example.com',
-        first_name: 'Demo',
-        last_name: 'User',
-        company_name: 'Demo Company',
-        phone: '0123456789',
-        plan: 'starter',
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        subscription_status: 'trial',
-        role: 'user',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      error: null
-    };
-  },
-
-  // Traduction des erreurs
-  translateError(message: string): string {
-    const translations: Record<string, string> = {
-      'Invalid login credentials': 'Email ou mot de passe incorrect',
-      'Email not confirmed': 'Veuillez confirmer votre email avant de vous connecter',
-      'Too many requests': 'Trop de tentatives. Veuillez réessayer dans quelques minutes',
-      'User already registered': 'Un compte avec cette adresse email existe déjà',
-      'Password should be at least': 'Le mot de passe doit contenir au moins 6 caractères',
-      'Invalid email': 'Format d\'email invalide'
-    };
-
-    for (const [key, value] of Object.entries(translations)) {
-      if (message.includes(key)) {
-        return value;
-      }
-    }
-
-    return message;
-  }
+      {/* Activités récentes */}
+      <div className="bg-white rounded-lg shadow-sm border">
+        <div className="p-6 border-b">
+          <h2 className="text-lg font-semibold text-gray-900">Activités récentes</h2>
+        </div>
+        <div className="divide-y">
+          {recentActivities.map((activity) => (
+            <div key={activity.id} className="p-6 flex items-center space-x-4">
+              <div className="p-2 bg-gray-100 rounded-lg">
+                <activity.icon className="w-5 h-5 text-gray-600" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-gray-900">{activity.title}</p>
+                <p className="text-sm text-gray-600">{activity.description}</p>
+              </div>
+              <div className="flex items-center text-sm text-gray-500">
+                <Clock className="w-4 h-4 mr-1" />
+                {activity.time}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 };
 
-// Fonctions pour la gestion des abonnements
-export const subscription = {
-  async updatePlan(userId: string, plan: 'starter' | 'professional' | 'expert') {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - mise à jour du plan simulée');
-        return { data: { plan }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          plan,
-          subscription_status: 'active'
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  async extendTrial(userId: string, days: number = 14) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - extension d\'essai simulée');
-        return { data: { trial_ends_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }, error: null };
-      }
-
-      const newTrialEnd = new Date();
-      newTrialEnd.setDate(newTrialEnd.getDate() + days);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          trial_ends_at: newTrialEnd.toISOString()
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  async cancelSubscription(userId: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - annulation simulée');
-        return { data: { subscription_status: 'cancelled' }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          subscription_status: 'cancelled'
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  }
-};
-
-// Fonction pour surveiller l'état de la connexion
-export const startConnectionMonitoring = () => {
-  setInterval(async () => {
-    const status = getConnectionStatus();
-    if (!status.connected && status.configured) {
-      console.log('Vérification de la reconnexion Supabase...');
-      await checkSupabaseConnection();
-    }
-  }, 60000); // Vérifier toutes les minutes
-};
-
-// Démarrer la surveillance automatiquement
-if (typeof window !== 'undefined') {
-  startConnectionMonitoring();
-}
+export default Dashboard;

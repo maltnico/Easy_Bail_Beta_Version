@@ -1,589 +1,313 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../types/database';
-import { activityService } from './activityService';
+import React, { useState, useEffect } from 'react';
+import { 
+  Plus, 
+  Search, 
+  Filter, 
+  Users, 
+  Phone, 
+  Mail,
+  MapPin,
+  Calendar,
+  Edit3,
+  Trash2
+} from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
+import { useDatabase } from '../../hooks/useDatabase';
+import TenantForm from './TenantForm';
 
-// Types pour l'authentification
-export type AuthUser = {
+interface Tenant {
   id: string;
-  email: string;
   first_name: string;
   last_name: string;
-  company_name?: string;
+  email: string;
   phone?: string;
-  plan: 'starter' | 'professional' | 'expert';
-  trial_ends_at: string;
-  subscription_status: 'trial' | 'active' | 'cancelled' | 'expired';
-  role?: 'user' | 'admin' | 'manager';
-  avatar_url?: string;
-  created_at: string;
-  updated_at: string;
-};
+  property_name?: string;
+  lease_start?: string;
+  lease_end?: string;
+  rent: number;
+  status: 'active' | 'inactive' | 'pending' | 'terminated';
+}
 
-// Configuration et état de la connexion
-class SupabaseConnection {
-  private client: any = null;
-  private isConfigured = false;
-  private isConnected = false;
-  private connectionAttempts = 0;
-  private maxRetries = 3;
-  private retryDelay = 2000;
-  private lastConnectionCheck = 0;
-  private connectionCheckInterval = 30000; // 30 secondes
+const Tenants: React.FC = () => {
+  const { user } = useAuth();
+  const { isConnected } = useDatabase();
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
 
-  constructor() {
-    this.initialize();
-  }
+  useEffect(() => {
+    loadTenants();
+  }, []);
 
-  private initialize() {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-    // Validation des variables d'environnement
-    this.isConfigured = this.validateConfig(supabaseUrl, supabaseAnonKey);
-
-    if (this.isConfigured) {
-      this.createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn('Configuration Supabase invalide - Mode démo activé');
-    }
-  }
-
-  private validateConfig(url: string, key: string): boolean {
-    if (!url || !key) {
-      console.warn('Variables d\'environnement Supabase manquantes');
-      return false;
-    }
-
-    if (url.includes('your-project-id') || key.includes('your-anon-key')) {
-      console.warn('Variables d\'environnement Supabase contiennent des valeurs par défaut');
-      return false;
-    }
-
+  const loadTenants = async () => {
+    setLoading(true);
     try {
-      new URL(url);
-      return true;
-    } catch {
-      console.warn('URL Supabase invalide');
-      return false;
-    }
-  }
-
-  private createClient(url: string, key: string) {
-    this.client = createClient<Database>(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-      global: {
-        fetch: this.createFetchWrapper(),
-      },
-    });
-  }
-
-  private createFetchWrapper() {
-    return async (url: string, options: any = {}) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      try {
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        
-        // Marquer comme connecté si la requête réussit
-        if (response.ok) {
-          this.isConnected = true;
-          this.connectionAttempts = 0;
+      // Simuler le chargement des locataires
+      const mockTenants: Tenant[] = [
+        {
+          id: '1',
+          first_name: 'Marie',
+          last_name: 'Dubois',
+          email: 'marie.dubois@email.com',
+          phone: '06 12 34 56 78',
+          property_name: 'Appartement A12 - 15 rue de la Paix',
+          lease_start: '2024-01-01',
+          lease_end: '2025-01-01',
+          rent: 850,
+          status: 'active'
+        },
+        {
+          id: '2',
+          first_name: 'Pierre',
+          last_name: 'Martin',
+          email: 'pierre.martin@email.com',
+          phone: '06 98 76 54 32',
+          property_name: 'Studio B5 - 8 avenue des Fleurs',
+          lease_start: '2024-03-15',
+          lease_end: '2025-03-15',
+          rent: 650,
+          status: 'active'
+        },
+        {
+          id: '3',
+          first_name: 'Sophie',
+          last_name: 'Bernard',
+          email: 'sophie.bernard@email.com',
+          phone: '06 11 22 33 44',
+          property_name: 'Maison C1 - 25 rue du Commerce',
+          lease_start: '2023-09-01',
+          lease_end: '2024-09-01',
+          rent: 1200,
+          status: 'terminated'
         }
+      ];
+      
+      setTenants(mockTenants);
+    } catch (error) {
+      console.error('Erreur lors du chargement des locataires:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        return response;
+  const filteredTenants = tenants.filter(tenant => {
+    const matchesSearch = 
+      tenant.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tenant.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tenant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tenant.property_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || tenant.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'terminated':
+        return 'bg-red-100 text-red-800';
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'Actif';
+      case 'pending':
+        return 'En attente';
+      case 'terminated':
+        return 'Terminé';
+      case 'inactive':
+        return 'Inactif';
+      default:
+        return status;
+    }
+  };
+
+  const handleEditTenant = (tenant: Tenant) => {
+    setSelectedTenant(tenant);
+    setShowForm(true);
+  };
+
+  const handleDeleteTenant = async (tenantId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce locataire ?')) {
+      try {
+        setTenants(tenants.filter(t => t.id !== tenantId));
       } catch (error) {
-        clearTimeout(timeoutId);
-        this.handleConnectionError(error);
-        throw error;
+        console.error('Erreur lors de la suppression:', error);
       }
-    };
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
   }
 
-  private handleConnectionError(error: any) {
-    const isNetworkError = 
-      error.name === 'AbortError' ||
-      error.name === 'TimeoutError' ||
-      error.message?.includes('Failed to fetch') ||
-      error.message?.includes('NetworkError') ||
-      error.message?.includes('timeout');
+  return (
+    <div className="p-6 space-y-6">
+      {/* En-tête */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Locataires</h1>
+          <p className="text-gray-600">Gérez vos locataires et leurs contrats</p>
+        </div>
+        <button
+          onClick={() => {
+            setSelectedTenant(null);
+            setShowForm(true);
+          }}
+          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Nouveau locataire
+        </button>
+      </div>
 
-    if (isNetworkError) {
-      this.isConnected = false;
-      this.connectionAttempts++;
-      
-      if (this.connectionAttempts <= this.maxRetries) {
-        console.warn(`Tentative de reconnexion ${this.connectionAttempts}/${this.maxRetries}`);
-        setTimeout(() => this.attemptReconnection(), this.retryDelay * this.connectionAttempts);
-      } else {
-        console.warn('Nombre maximum de tentatives de reconnexion atteint');
-      }
-    }
-  }
+      {/* Filtres et recherche */}
+      <div className="bg-white p-4 rounded-lg shadow-sm border">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Rechercher un locataire..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Filter className="w-4 h-4 text-gray-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="active">Actif</option>
+              <option value="pending">En attente</option>
+              <option value="terminated">Terminé</option>
+              <option value="inactive">Inactif</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-  private async attemptReconnection() {
-    try {
-      const connected = await this.checkConnection();
-      if (connected) {
-        console.log('Reconnexion Supabase réussie');
-        this.isConnected = true;
-        this.connectionAttempts = 0;
-      }
-    } catch (error) {
-      console.warn('Échec de la reconnexion:', error);
-    }
-  }
+      {/* Liste des locataires */}
+      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        {filteredTenants.length === 0 ? (
+          <div className="p-8 text-center">
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun locataire trouvé</h3>
+            <p className="text-gray-600">
+              {searchTerm || statusFilter !== 'all' 
+                ? 'Aucun locataire ne correspond à vos critères de recherche.'
+                : 'Commencez par ajouter votre premier locataire.'
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y">
+            {filteredTenants.map((tenant) => (
+              <div key={tenant.id} className="p-6 hover:bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Users className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3">
+                          <h3 className="text-lg font-medium text-gray-900">
+                            {tenant.first_name} {tenant.last_name}
+                          </h3>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(tenant.status)}`}>
+                            {getStatusLabel(tenant.status)}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <Mail className="w-4 h-4 mr-2" />
+                            {tenant.email}
+                          </div>
+                          {tenant.phone && (
+                            <div className="flex items-center">
+                              <Phone className="w-4 h-4 mr-2" />
+                              {tenant.phone}
+                            </div>
+                          )}
+                          {tenant.property_name && (
+                            <div className="flex items-center">
+                              <MapPin className="w-4 h-4 mr-2" />
+                              {tenant.property_name}
+                            </div>
+                          )}
+                          {tenant.lease_start && (
+                            <div className="flex items-center">
+                              <Calendar className="w-4 h-4 mr-2" />
+                              Bail: {new Date(tenant.lease_start).toLocaleDateString()} - {tenant.lease_end && new Date(tenant.lease_end).toLocaleDateString()}
+                            </div>
+                          )}
+                          <div className="flex items-center font-medium">
+                            Loyer: {tenant.rent}€/mois
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleEditTenant(tenant)}
+                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTenant(tenant.id)}
+                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-  async checkConnection(): Promise<boolean> {
-    if (!this.isConfigured || !this.client) return false;
-
-    const now = Date.now();
-    if (now - this.lastConnectionCheck < this.connectionCheckInterval) {
-      return this.isConnected;
-    }
-
-    try {
-      const { error } = await this.client.from('profiles').select('id', { count: 'exact', head: true });
-      this.isConnected = !error;
-      this.lastConnectionCheck = now;
-      return this.isConnected;
-    } catch (error) {
-      this.isConnected = false;
-      this.lastConnectionCheck = now;
-      return false;
-    }
-  }
-
-  getClient() {
-    return this.client;
-  }
-
-  isReady(): boolean {
-    return this.isConfigured && this.isConnected;
-  }
-
-  getConnectionStatus() {
-    return {
-      configured: this.isConfigured,
-      connected: this.isConnected,
-      attempts: this.connectionAttempts,
-    };
-  }
-}
-
-// Instance singleton de la connexion
-const supabaseConnection = new SupabaseConnection();
-export const supabase = supabaseConnection.getClient();
-
-// Fonctions utilitaires
-export const checkSupabaseConnection = () => supabaseConnection.checkConnection();
-export const isConnected = () => supabaseConnection.isReady();
-export const getConnectionStatus = () => supabaseConnection.getConnectionStatus();
-
-// Service d'authentification amélioré
-export const auth = {
-  // Inscription avec gestion d'erreur améliorée
-  async signUp(email: string, password: string, userData: {
-    firstName: string;
-    lastName: string;
-    companyName?: string;
-    phone?: string;
-  }) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.handleOfflineAuth('signup', email, userData);
-      }
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            company_name: userData.companyName,
-            phone: userData.phone
-          },
-        }
-      });
-
-      if (error) throw error;
-
-      // Log de l'activité si possible
-      try {
-        await activityService.addActivity({
-          type: 'system',
-          action: 'user_signup',
-          title: 'Nouveau compte créé',
-          description: `Compte créé pour ${userData.firstName} ${userData.lastName}`,
-          userId: data.user?.id || 'unknown',
-          priority: 'medium',
-          category: 'success'
-        });
-      } catch (activityError) {
-        console.warn('Impossible de logger l\'activité:', activityError);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return this.handleAuthError(error, 'signup', email, userData);
-    }
-  },
-
-  // Connexion avec gestion d'erreur améliorée
-  async signIn(email: string, password: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.handleOfflineAuth('signin', email);
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) throw error;
-
-      // Log de l'activité si possible
-      try {
-        await activityService.addActivity({
-          type: 'login',
-          action: 'user_signin',
-          title: 'Connexion utilisateur',
-          description: `Connexion réussie pour ${email}`,
-          userId: data.user?.id || 'unknown',
-          priority: 'low',
-          category: 'info'
-        });
-      } catch (activityError) {
-        console.warn('Impossible de logger l\'activité:', activityError);
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      return this.handleAuthError(error, 'signin', email);
-    }
-  },
-
-  // Déconnexion
-  async signOut() {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return { error: null };
-      }
-
-      const { error } = await supabase.auth.signOut();
-      return { error: error ? { message: error.message } : null };
-    } catch (error) {
-      console.warn('Erreur lors de la déconnexion:', error);
-      return { error: null }; // Toujours permettre la déconnexion locale
-    }
-  },
-
-  // Récupérer la session actuelle
-  async getSession() {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.getDemoSession();
-      }
-
-      const { data, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        // Gérer les erreurs de session invalide
-        if (error.message.includes('User from sub claim in JWT does not exist') ||
-            error.message.includes('Invalid Refresh Token')) {
-          await supabase.auth.signOut();
-          return { data: { session: null }, error: null };
-        }
-        throw error;
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      console.warn('Erreur lors de la récupération de session:', error);
-      return this.getDemoSession();
-    }
-  },
-
-  // Récupérer le profil utilisateur
-  async getProfile(userId: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        return this.getDemoProfile(userId);
-      }
-
-      const { data: session, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) throw sessionError;
-      
-      if (session?.session?.user.id === userId) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-        
-        if (error) throw error;
-        return { data, error: null };
-      }
-      
-      throw new Error('Utilisateur non trouvé');
-    } catch (error) {
-      console.warn('Erreur lors de la récupération du profil:', error);
-      return this.getDemoProfile(userId);
-    }
-  },
-
-  // Mettre à jour le profil
-  async updateProfile(userId: string, updates: Partial<AuthUser>) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - mise à jour du profil simulée');
-        return { data: { ...updates, id: userId }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  // Réinitialiser le mot de passe
-  async resetPassword(email: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - réinitialisation simulée');
-        return { data: {}, error: null };
-      }
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
-      return { data: {}, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  // Gestion de l'authentification hors ligne
-  handleOfflineAuth(operation: string, email: string, userData?: any) {
-    console.warn(`Mode hors ligne activé pour ${operation}`);
-    
-    const mockUser = {
-      id: 'demo-user-id',
-      email,
-      user_metadata: userData ? {
-        first_name: userData.firstName,
-        last_name: userData.lastName,
-        company_name: userData.companyName,
-        phone: userData.phone
-      } : {
-        first_name: 'Demo',
-        last_name: 'User'
-      }
-    };
-
-    return {
-      data: {
-        user: mockUser,
-        session: {
-          access_token: 'demo-token',
-          refresh_token: 'demo-refresh-token',
-          expires_at: Date.now() + 3600000
-        }
-      },
-      error: null
-    };
-  },
-
-  // Gestion des erreurs d'authentification
-  handleAuthError(error: any, operation: string, email?: string, userData?: any) {
-    const errorMessage = (error as Error).message;
-    
-    // Erreurs réseau - basculer en mode démo
-    if (errorMessage.includes('Failed to fetch') ||
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('NetworkError') ||
-        errorMessage.includes('AbortError')) {
-      console.warn(`Erreur réseau lors de ${operation} - Mode démo activé`);
-      return this.handleOfflineAuth(operation, email || 'demo@example.com', userData);
-    }
-
-    // Autres erreurs - retourner l'erreur réelle
-    return {
-      data: { user: null, session: null },
-      error: { message: this.translateError(errorMessage) }
-    };
-  },
-
-  // Session démo
-  getDemoSession() {
-    return {
-      data: {
-        session: {
-          user: {
-            id: 'demo-user-id',
-            email: 'demo@example.com',
-            user_metadata: {
-              first_name: 'Demo',
-              last_name: 'User'
-            }
-          },
-          access_token: 'demo-token',
-          refresh_token: 'demo-refresh-token',
-          expires_at: Date.now() + 3600000
-        }
-      },
-      error: null
-    };
-  },
-
-  // Profil démo
-  getDemoProfile(userId: string) {
-    return {
-      data: {
-        id: userId,
-        email: 'demo@example.com',
-        first_name: 'Demo',
-        last_name: 'User',
-        company_name: 'Demo Company',
-        phone: '0123456789',
-        plan: 'starter',
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        subscription_status: 'trial',
-        role: 'user',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      error: null
-    };
-  },
-
-  // Traduction des erreurs
-  translateError(message: string): string {
-    const translations: Record<string, string> = {
-      'Invalid login credentials': 'Email ou mot de passe incorrect',
-      'Email not confirmed': 'Veuillez confirmer votre email avant de vous connecter',
-      'Too many requests': 'Trop de tentatives. Veuillez réessayer dans quelques minutes',
-      'User already registered': 'Un compte avec cette adresse email existe déjà',
-      'Password should be at least': 'Le mot de passe doit contenir au moins 6 caractères',
-      'Invalid email': 'Format d\'email invalide'
-    };
-
-    for (const [key, value] of Object.entries(translations)) {
-      if (message.includes(key)) {
-        return value;
-      }
-    }
-
-    return message;
-  }
+      {/* Modal de formulaire */}
+      {showForm && (
+        <TenantForm
+          tenant={selectedTenant}
+          onClose={() => {
+            setShowForm(false);
+            setSelectedTenant(null);
+          }}
+          onSave={() => {
+            setShowForm(false);
+            setSelectedTenant(null);
+            loadTenants();
+          }}
+        />
+      )}
+    </div>
+  );
 };
 
-// Fonctions pour la gestion des abonnements
-export const subscription = {
-  async updatePlan(userId: string, plan: 'starter' | 'professional' | 'expert') {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - mise à jour du plan simulée');
-        return { data: { plan }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          plan,
-          subscription_status: 'active'
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  async extendTrial(userId: string, days: number = 14) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - extension d\'essai simulée');
-        return { data: { trial_ends_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }, error: null };
-      }
-
-      const newTrialEnd = new Date();
-      newTrialEnd.setDate(newTrialEnd.getDate() + days);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          trial_ends_at: newTrialEnd.toISOString()
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  },
-
-  async cancelSubscription(userId: string) {
-    try {
-      if (!supabaseConnection.isReady()) {
-        console.warn('Mode hors ligne - annulation simulée');
-        return { data: { subscription_status: 'cancelled' }, error: null };
-      }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ 
-          subscription_status: 'cancelled'
-        })
-        .eq('id', userId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error: { message: (error as Error).message } };
-    }
-  }
-};
-
-// Fonction pour surveiller l'état de la connexion
-export const startConnectionMonitoring = () => {
-  setInterval(async () => {
-    const status = getConnectionStatus();
-    if (!status.connected && status.configured) {
-      console.log('Vérification de la reconnexion Supabase...');
-      await checkSupabaseConnection();
-    }
-  }, 60000); // Vérifier toutes les minutes
-};
-
-// Démarrer la surveillance automatiquement
-if (typeof window !== 'undefined') {
-  startConnectionMonitoring();
-}
+export default Tenants;
