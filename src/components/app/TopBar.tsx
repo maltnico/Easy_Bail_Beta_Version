@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database';
-import { activityService } from './activityService';
+import { activityService } from '../../lib/activityService';
 
 // Types pour l'authentification
 export type AuthUser = {
