@@ -65,6 +65,110 @@ const Features = () => {
         "Signalement d'incidents",
         "Messagerie intégrée"
       ]
+    },
+    {
+      icon: Users,
+      title: "Espace locataire",
+      description: "Application mobile dédiée pour vos locataires",
+      color: "bg-blue-500",
+      features: [
+        "App mobile iOS et Android",
+        "Paiement en ligne sécurisé",
+        "Signalement d'incidents",
+        "Messagerie intégrée",
+        "Historique complet"
+      ]
+    },
+    {
+      icon: AlertTriangle,
+      title: "Résolution d'incidents",
+      description: "Plateforme complète de gestion des problèmes locatifs",
+      color: "bg-yellow-600",
+      features: [
+        "Ticketing intelligent",
+        "Réseau d'artisans partenaires",
+        "Suivi en temps réel",
+        "Procédures juridiques guidées",
+        "Médiation automatisée"
+      ]
+    },
+    {
+      icon: Shield,
+      title: "Sécurité & Conformité",
+      description: "Sécurité bancaire et conformité réglementaire garanties",
+      color: "bg-gray-600",
+      features: [
+        "Chiffrement AES-256",
+        "Hébergement France (OVH)",
+        "Certification ISO 27001",
+        "Conformité RGPD",
+        "Sauvegarde quotidienne"
+      ]
+    },
+    {
+      icon: BookOpen,
+      title: "Accompagnement Expert",
+      description: "Formation et support par des experts de l'immobilier",
+      color: "bg-green-500",
+      features: [
+        "Onboarding personnalisé",
+        "Webinaires mensuels",
+        "Support juridique inclus",
+        "Veille réglementaire",
+        "Communauté d'experts"
+      ]
+    },
+    {
+      icon: Smartphone,
+      title: "Applications mobiles",
+      description: "Gérez votre patrimoine depuis votre smartphone",
+      color: "bg-indigo-600",
+      features: [
+        "App iOS et Android natives",
+        "Synchronisation temps réel",
+        "Mode hors ligne",
+        "Notifications push",
+        "Interface optimisée mobile"
+      ]
+    },
+    {
+      icon: Globe,
+      title: "API & Intégrations",
+      description: "Connectez EasyBail à vos outils existants",
+      color: "bg-teal-600",
+      features: [
+        "API REST complète",
+        "Webhooks en temps réel",
+        "Intégration comptable",
+        "Connecteurs bancaires",
+        "Marketplace d'extensions"
+      ]
+    },
+    {
+      icon: Clock,
+      title: "Gestion du temps",
+      description: "Optimisez votre temps avec la planification intelligente",
+      color: "bg-red-600",
+      features: [
+        "Planification intelligente",
+        "Priorisation automatique",
+        "Calendrier unifié",
+        "Rappels contextuels",
+        "Optimisation des déplacements"
+      ]
+    },
+    {
+      icon: Award,
+      title: "Certification & Audit",
+      description: "Outils professionnels pour la certification",
+      color: "bg-pink-600",
+      features: [
+        "Audit de conformité",
+        "Certification qualité",
+        "Rapports d'expertise",
+        "Validation juridique",
+        "Accompagnement certification"
+      ]
     }
   ];
 
@@ -184,130 +288,6 @@ const Features = () => {
               </button>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-};
-    {
-      icon: Users,
-      title: "Espace locataire",
-      description: "Application mobile dédiée pour vos locataires",
-      color: "bg-blue-500",
-      features: [
-        "App mobile iOS et Android",
-        "Paiement en ligne sécurisé",
-        "Signalement d'incidents",
-        "Messagerie intégrée",
-        "Historique complet"
-      ]
-    },
-    {
-      icon: AlertTriangle,
-      title: "Résolution d'incidents",
-      description: "Plateforme complète de gestion des problèmes locatifs",
-      color: "bg-yellow-600",
-      features: [
-        "Ticketing intelligent",
-        "Réseau d'artisans partenaires",
-        "Suivi en temps réel",
-        "Procédures juridiques guidées",
-        "Médiation automatisée"
-      ]
-    },
-    {
-      icon: Shield,
-      title: "Sécurité & Conformité",
-      description: "Sécurité bancaire et conformité réglementaire garanties",
-      color: "bg-gray-600",
-      features: [
-        "Chiffrement AES-256",
-        "Hébergement France (OVH)",
-        "Certification ISO 27001",
-        "Conformité RGPD",
-        "Sauvegarde quotidienne"
-      ]
-    },
-    {
-      icon: BookOpen,
-      title: "Accompagnement Expert",
-      description: "Formation et support par des experts de l'immobilier",
-      color: "bg-green-500",
-      features: [
-        "Onboarding personnalisé",
-        "Webinaires mensuels",
-        "Support juridique inclus",
-        "Veille réglementaire",
-        "Communauté d'experts"
-      ]
-    },
-    {
-      icon: Smartphone,
-      title: "Applications mobiles",
-      description: "Gérez votre patrimoine depuis votre smartphone",
-      color: "bg-indigo-600",
-      features: [
-        "App iOS et Android natives",
-        "Synchronisation temps réel",
-        "Mode hors ligne",
-        "Notifications push",
-        "Interface optimisée mobile"
-      ]
-    },
-    {
-      icon: Globe,
-      title: "API & Intégrations",
-      description: "Connectez EasyBail à vos outils existants",
-      color: "bg-teal-600",
-      features: [
-        "API REST complète",
-        "Webhooks en temps réel",
-        "Intégration comptable",
-        "Connecteurs bancaires",
-        "Marketplace d'extensions"
-      ]
-    },
-    {
-      icon: Clock,
-      title: "Gestion du temps",
-      description: "Optimisez votre temps avec la planification intelligente",
-      color: "bg-red-600",
-      features: [
-        "Planification intelligente",
-        "Priorisation automatique",
-        "Calendrier unifié",
-        "Rappels contextuels",
-        "Optimisation des déplacements"
-      ]
-    },
-    {
-      icon: Award,
-      title: "Certification & Audit",
-      description: "Outils professionnels pour la certification",
-      color: "bg-pink-600",
-      features: [
-        "Audit de conformité",
-        "Certification qualité",
-        "Rapports d'expertise",
-        "Validation juridique",
-        "Accompagnement certification"
-      ]
-    }
-  ];
-
-  return (
-    <section id="fonctionnalites" className="py-20 bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6">
-            Toutes les fonctionnalités pour
-            <span className="text-blue-600 block">gérer vos biens</span>
-          </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Plateforme complète pour simplifier votre gestion locative 
-            et optimiser votre rentabilité immobilière.
-          </p>
         </div>
 
         {/* Features Grid */}
