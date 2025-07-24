@@ -13,16 +13,15 @@ const Pricing: React.FC<PricingProps> = ({ onLoginClick, onSignupClick }) => {
       icon: Zap,
       name: "Starter",
       price: "19",
-      originalPrice: "29",
+      originalPrice: null,
       period: "/mois",
       description: "Idéal pour commencer",
       features: [
         "Jusqu'à 3 biens",
-        "50+ modèles de documents",
+        "Modèles de documents",
         "Signature électronique",
         "Automatisations de base",
-        "Support email",
-        "App mobile incluse"
+        "Support email"
       ],
       popular: false,
       cta: "Commencer l'essai",
@@ -32,7 +31,7 @@ const Pricing: React.FC<PricingProps> = ({ onLoginClick, onSignupClick }) => {
       icon: Crown,
       name: "Professionnel",
       price: "49",
-      originalPrice: "79",
+      originalPrice: null,
       period: "/mois",
       description: "Le plus populaire",
       features: [
@@ -41,8 +40,7 @@ const Pricing: React.FC<PricingProps> = ({ onLoginClick, onSignupClick }) => {
         "Automatisations avancées",
         "Support prioritaire",
         "Analytics avancés",
-        "API & intégrations",
-        "Formation personnalisée"
+        "API & intégrations"
       ],
       popular: true,
       cta: "Choisir Professionnel",
@@ -52,15 +50,13 @@ const Pricing: React.FC<PricingProps> = ({ onLoginClick, onSignupClick }) => {
       icon: Rocket,
       name: "Expert",
       price: "99",
-      originalPrice: "149",
+      originalPrice: null,
       period: "/mois",
       description: "Pour les pros de l'immobilier",
       features: [
         "Biens illimités",
-        "Automatisations personnalisées",
+        "Tout inclus",
         "Support dédié 24/7",
-        "Onboarding VIP",
-        "Développements sur mesure",
         "Account manager dédié",
         "SLA garantie 99.9%"
       ],
@@ -74,21 +70,17 @@ const Pricing: React.FC<PricingProps> = ({ onLoginClick, onSignupClick }) => {
     <section id="tarifs" className="py-20 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-20">
-          <div className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-lg text-sm font-semibold mb-6">
-            <Star className="h-4 w-4 mr-2 fill-current" />
-            Offre de lancement - 50% de réduction
-          </div>
           <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6">
             Tarifs transparents,
             <span className="text-blue-600 block">résultats garantis</span>
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Essai gratuit de 30 jours, puis choisissez la formule qui correspond 
-            à la taille de votre patrimoine. Changement possible à tout moment.
+            Essai gratuit de 30 jours, puis choisissez la formule adaptée 
+            à votre patrimoine.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto mb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-5xl mx-auto mb-16">
           {plans.map((plan, index) => (
             <div
               key={index}
@@ -114,17 +106,9 @@ const Pricing: React.FC<PricingProps> = ({ onLoginClick, onSignupClick }) => {
                 <h3 className="text-2xl font-bold text-gray-900 mb-3">{plan.name}</h3>
                 <p className="text-gray-600 mb-6">{plan.description}</p>
                 <div className="flex items-baseline justify-center mb-2">
-                  {plan.originalPrice && (
-                    <span className="text-2xl text-gray-400 line-through mr-2">{plan.originalPrice}€</span>
-                  )}
                   <span className="text-4xl font-bold text-gray-900">{plan.price}€</span>
                   <span className="text-xl text-gray-500 ml-1">{plan.period}</span>
                 </div>
-                {plan.originalPrice && (
-                  <div className="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 rounded-lg text-sm font-semibold">
-                    Économisez {parseInt(plan.originalPrice) - parseInt(plan.price)}€/mois
-                  </div>
-                )}
               </div>
 
               <ul className="space-y-4 mb-10">
@@ -157,15 +141,14 @@ const Pricing: React.FC<PricingProps> = ({ onLoginClick, onSignupClick }) => {
         </div>
 
         {/* Additional Info */}
-        <div className="bg-gray-50 rounded-xl p-8 text-center border border-gray-200">
+        <div className="bg-gray-50 rounded-xl p-6 text-center border border-gray-200 max-w-3xl mx-auto">
           <h3 className="text-2xl font-bold text-gray-900 mb-4">
             Garantie satisfait ou remboursé 30 jours
           </h3>
           <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-            Essayez EasyBail sans risque. Si vous n'êtes pas entièrement satisfait, 
-            nous vous remboursons intégralement.
+            Essayez EasyBail sans risque pendant 30 jours.
           </p>
-          <div className="flex flex-wrap justify-center gap-8 text-sm text-gray-600">
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-gray-600">
             <div className="flex items-center">
               <Check className="h-5 w-5 text-green-600 mr-2" />
               <span className="font-medium">Sans engagement</span>
@@ -176,11 +159,7 @@ const Pricing: React.FC<PricingProps> = ({ onLoginClick, onSignupClick }) => {
             </div>
             <div className="flex items-center">
               <Check className="h-5 w-5 text-green-600 mr-2" />
-              <span className="font-medium">Formation incluse</span>
-            </div>
-            <div className="flex items-center">
-              <Check className="h-5 w-5 text-green-600 mr-2" />
-              <span className="font-medium">Support expert 24/7</span>
+              <span className="font-medium">Support expert</span>
             </div>
           </div>
         </div>

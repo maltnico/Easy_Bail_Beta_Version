@@ -3,10 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Hero from '../components/Hero';
 import Features from '../components/Features';
-import NewFeatures from '../components/app/NewFeatures';
-import TestimonialsSection from '../components/app/TestimonialsSection';
-import FAQSection from '../components/app/FAQSection';
-import Stats from '../components/Stats';
 import Pricing from '../components/Pricing';
 import CTA from '../components/CTA';
 import Footer from '../components/Footer';
@@ -33,10 +29,6 @@ const LandingPage = () => {
         onSignupClick={handleSignupClick}
       />
       <Features />
-      <NewFeatures />
-      <TestimonialsSection />
-      <FAQSection />
-      <Stats />
       <Pricing 
         onLoginClick={handleLoginClick}
         onSignupClick={handleSignupClick}
