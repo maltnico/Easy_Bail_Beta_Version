@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   UserPlus, 
@@ -43,6 +43,7 @@ const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPlan, setFilterPlan] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -62,34 +63,54 @@ const AdminUsers: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Vérifier d'abord si l'utilisateur est admin
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError('Utilisateur non connecté');
+        return;
+      }
 
-      // Get all users from profiles table (admin can see all users)
-      const { data, error } = await supabase
+      // Récupérer le profil de l'utilisateur actuel pour vérifier s'il est admin
+      const { data: currentUserProfile, error: profileError } = await supabase
         .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('role')
+        .eq('id', user.id)
+        .single();
 
-      if (error) throw error;
+      if (profileError) {
+        setError('Erreur lors de la vérification des droits');
+        return;
+      }
+
+      if (currentUserProfile?.role !== 'admin') {
+        setIsAdmin(false);
+        setError('Accès non autorisé - droits administrateur requis');
+        return;
+      }
+
+      setIsAdmin(true);
+
+      // Pour l'instant, utiliser le service administrateur de Supabase
+      // Note: Ceci nécessite une clé de service ou une fonction edge
+      setError('Fonctionnalité en cours de développement - contactez le support technique');
+      setUsers([]);
       
-      setUsers(data || []);
     } catch (err) {
-      console.error('Error loading users:', err);
-      
-      // En cas d'erreur, afficher le message d'erreur
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue lors du chargement des utilisateurs');
-      console.error('Erreur détaillée:', err);
+      console.error('Erreur lors du chargement des utilisateurs:', err);
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -137,6 +158,11 @@ const AdminUsers: React.FC = () => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!isAdmin) {
+      setError('Accès non autorisé');
+      return;
+    }
+
     if (!validateForm()) return;
     
     try {
@@ -144,89 +170,11 @@ const AdminUsers: React.FC = () => {
       setFormSuccess(null);
       
       if (editingUser) {
-        // Update existing user
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            first_name: formData.first_name,
-            last_name: formData.last_name,
-            company_name: formData.company_name || null,
-            phone: formData.phone || null,
-            plan: formData.plan
-          })
-          .eq('id', editingUser.id);
-        
-        if (error) throw error;
-        
-        // Log activity
-        activityService.addActivity({
-          type: 'system',
-          action: 'user_updated',
-          title: 'Utilisateur mis à jour',
-          description: `L'utilisateur ${formData.first_name} ${formData.last_name} a été mis à jour`,
-          userId: 'current-user',
-          priority: 'medium',
-          category: 'info'
-        });
-        
-        setFormSuccess('Utilisateur mis à jour avec succès');
+        setError('Modification d\'utilisateur en cours de développement - contactez le support technique');
       } else {
-        // Create new user via auth.signUp
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password
-        });
-        
-        if (authError) throw authError;
-        
-        // Create profile manually since we're in admin mode
-        if (authData.user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: authData.user.id,
-              email: formData.email,
-              first_name: formData.first_name,
-              last_name: formData.last_name,
-              company_name: formData.company_name || null,
-              phone: formData.phone || null,
-              plan: formData.plan
-            });
-          
-          if (profileError) throw profileError;
-        }
-        
-        // Log activity
-        activityService.addActivity({
-          type: 'system',
-          action: 'user_created',
-          title: 'Nouvel utilisateur créé',
-          description: `L'utilisateur ${formData.first_name} ${formData.last_name} a été créé`,
-          userId: 'current-user',
-          priority: 'medium',
-          category: 'success'
-        });
-        
-        setFormSuccess('Utilisateur créé avec succès');
+        setError('Création d\'utilisateur en cours de développement - contactez le support technique');
       }
       
-      // Reload users
-      await loadUsers();
-      
-      // Reset form
-      setFormData({
-        email: '',
-        first_name: '',
-        last_name: '',
-        company_name: '',
-        phone: '',
-        plan: 'starter',
-        password: '',
-        confirmPassword: ''
-      });
-      
-      setShowUserForm(false);
-      setEditingUser(null);
     } catch (err) {
       console.error('Error creating/updating user:', err);
       setFormErrors({
@@ -253,6 +201,11 @@ const AdminUsers: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
+    if (!isAdmin) {
+      setError('Accès non autorisé');
+      return;
+    }
+
     // Empêcher la suppression de l'admin principal
     const userToDelete = users.find(u => u.id === userId);
     if (userToDelete?.email === 'admin@easybail.pro') {
@@ -265,27 +218,7 @@ const AdminUsers: React.FC = () => {
     try {
       setLoading(true);
       
-      // Delete user from profiles table (admin action)
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-      
-      if (error) throw error;
-      
-      // Log activity
-      activityService.addActivity({
-        type: 'system',
-        action: 'user_deleted',
-        title: 'Utilisateur supprimé',
-        description: `Un utilisateur a été supprimé du système`,
-        userId: 'current-user',
-        priority: 'high',
-        category: 'warning'
-      });
-      
-      // Reload users
-      await loadUsers();
+      setError('Suppression d\'utilisateur en cours de développement - contactez le support technique');
     } catch (err) {
       console.error('Error deleting user:', err);
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
@@ -295,6 +228,11 @@ const AdminUsers: React.FC = () => {
   };
 
   const handleChangeRole = async (userId: string, role: string) => {
+    if (!isAdmin) {
+      setError('Accès non autorisé');
+      return;
+    }
+
     try {
       setLoading(true);
       
@@ -305,29 +243,7 @@ const AdminUsers: React.FC = () => {
         return;
       }
       
-      // Update role in profiles table
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ role })
-        .eq('id', userId);
-      
-      if (profileError) throw profileError;
-      
-      // Update local state
-      setUsers(prev => prev.map(user => 
-        user.id === userId ? { ...user, role } : user
-      ));
-      
-      // Log activity
-      activityService.addActivity({
-        type: 'system',
-        action: 'role_changed',
-        title: 'Rôle utilisateur modifié',
-        description: `Le rôle d'un utilisateur a été changé en ${role}`,
-        userId: 'current-user',
-        priority: 'medium',
-        category: 'warning'
-      });
+      setError('Modification d\'utilisateur en cours de développement - contactez le support technique');
       
     } catch (err) {
       console.error('Error changing user role:', err);
@@ -457,6 +373,16 @@ const AdminUsers: React.FC = () => {
           <div>
             <p className="text-red-800 font-medium">Erreur</p>
             <p className="text-red-700 text-sm">{error}</p>
+            {error.includes('en cours de développement') && (
+              <div className="mt-2 text-sm text-gray-600">
+                <p>Pour gérer les utilisateurs, vous pouvez :</p>
+                <ul className="list-disc list-inside mt-1">
+                  <li>Utiliser le tableau de bord Supabase directement</li>
+                  <li>Contacter le support pour une solution personnalisée</li>
+                  <li>Utiliser les outils d'administration Supabase</li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -617,36 +543,56 @@ const AdminUsers: React.FC = () => {
         </div>
       </div>
 
-      {filteredUsers.length === 0 && (
-        <div className="text-center py-12">
-          <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun utilisateur trouvé</h3>
-          <p className="text-gray-600 mb-4">
-            {searchTerm || filterPlan !== 'all' || filterStatus !== 'all'
-              ? 'Aucun utilisateur ne correspond à vos critères de recherche.'
-              : 'Aucun utilisateur n\'a encore créé de compte.'
-            }
-          </p>
-          <button 
-            onClick={() => {
-              setEditingUser(null);
-              setFormData({
-                email: '',
-                first_name: '',
-                last_name: '',
-                company_name: '',
-                phone: '',
-                plan: 'starter',
-                password: '',
-                confirmPassword: ''
-              });
-              setShowUserForm(true);
-            }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Ajouter un utilisateur
-          </button>
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement des utilisateurs...</p>
         </div>
+      ) : !isAdmin ? (
+        <div className="text-center py-8">
+          <Shield className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">Accès administrateur requis</p>
+        </div>
+      ) : users.length === 0 ? (
+        <div className="text-center py-8">
+          <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">Fonctionnalité en cours de développement</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Utilisez le tableau de bord Supabase pour gérer les utilisateurs
+          </p>
+        </div>
+      ) : (
+        filteredUsers.length === 0 && (
+          <div className="text-center py-12">
+            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun utilisateur trouvé</h3>
+            <p className="text-gray-600 mb-4">
+              {searchTerm || filterPlan !== 'all' || filterStatus !== 'all'
+                ? 'Aucun utilisateur ne correspond à vos critères de recherche.'
+                : 'Aucun utilisateur n\'a encore créé de compte.'
+              }
+            </p>
+            <button 
+              onClick={() => {
+                setEditingUser(null);
+                setFormData({
+                  email: '',
+                  first_name: '',
+                  last_name: '',
+                  company_name: '',
+                  phone: '',
+                  plan: 'starter',
+                  password: '',
+                  confirmPassword: ''
+                });
+                setShowUserForm(true);
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Ajouter un utilisateur
+            </button>
+          </div>
+        )
       )}
 
       {/* User Form Modal */}
