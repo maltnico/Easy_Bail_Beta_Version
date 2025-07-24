@@ -63,18 +63,6 @@ const Features = () => {
         "App mobile iOS et Android",
         "Paiement en ligne sécurisé",
         "Signalement d'incidents",
-        "Messagerie intégrée"
-      ]
-    },
-    {
-      icon: Users,
-      title: "Espace locataire",
-      description: "Application mobile dédiée pour vos locataires",
-      color: "bg-blue-500",
-      features: [
-        "App mobile iOS et Android",
-        "Paiement en ligne sécurisé",
-        "Signalement d'incidents",
         "Messagerie intégrée",
         "Historique complet"
       ]
