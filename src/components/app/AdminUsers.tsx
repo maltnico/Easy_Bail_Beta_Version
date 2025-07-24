@@ -71,7 +71,7 @@ const AdminUsers: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Get all users from profiles table (admin can see all users - no user filter)
+      // Get all users from profiles table (admin can see all users)
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -83,167 +83,9 @@ const AdminUsers: React.FC = () => {
     } catch (err) {
       console.error('Error loading users:', err);
       
-      // En cas d'erreur de connexion, utiliser des données de démonstration
-      if (err instanceof Error && (
-        err.message.includes('Failed to fetch') ||
-        err.message.includes('timeout') ||
-        err.message.includes('NetworkError')
-      )) {
-        console.warn('Erreur de connexion, utilisation des données de démonstration');
-        
-        // Données de démonstration - tous les utilisateurs de l'app
-        const demoUsers: User[] = [
-          {
-            id: 'admin-1',
-            email: 'admin@easybail.pro',
-            first_name: 'Admin',
-            last_name: 'EasyBail',
-            company_name: 'EasyBail SAS',
-            phone: '04 66 89 68 30',
-            plan: 'expert',
-            trial_ends_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'active',
-            avatar_url: null,
-            created_at: '2024-01-01T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date().toISOString(),
-            role: 'admin'
-          },
-          {
-            id: 'user-1',
-            email: 'marie.martin@email.com',
-            first_name: 'Marie',
-            last_name: 'Martin',
-            company_name: null,
-            phone: '06 12 34 56 78',
-            plan: 'professional',
-            trial_ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'trial',
-            avatar_url: null,
-            created_at: '2024-11-15T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-            role: 'user'
-          },
-          {
-            id: 'user-2',
-            email: 'pierre.dubois@email.com',
-            first_name: 'Pierre',
-            last_name: 'Dubois',
-            company_name: 'Immobilier Dubois',
-            phone: '06 98 76 54 32',
-            plan: 'starter',
-            trial_ends_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'expired',
-            avatar_url: null,
-            created_at: '2024-10-20T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-            role: 'user'
-          },
-          {
-            id: 'user-3',
-            email: 'sophie.bernard@email.com',
-            first_name: 'Sophie',
-            last_name: 'Bernard',
-            company_name: 'SCI Bernard',
-            phone: '07 11 22 33 44',
-            plan: 'professional',
-            trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'active',
-            avatar_url: null,
-            created_at: '2024-09-10T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-            role: 'manager'
-          },
-          {
-            id: 'user-4',
-            email: 'jean.dupont@email.com',
-            first_name: 'Jean',
-            last_name: 'Dupont',
-            company_name: null,
-            phone: null,
-            plan: 'starter',
-            trial_ends_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'trial',
-            avatar_url: null,
-            created_at: '2024-12-01T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-            role: 'user'
-          },
-          {
-            id: 'user-5',
-            email: 'claire.rousseau@email.com',
-            first_name: 'Claire',
-            last_name: 'Rousseau',
-            company_name: 'Gestion Rousseau',
-            phone: '06 55 44 33 22',
-            plan: 'expert',
-            trial_ends_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'active',
-            avatar_url: null,
-            created_at: '2024-08-05T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-            role: 'manager'
-          },
-          {
-            id: 'user-6',
-            email: 'thomas.leroy@email.com',
-            first_name: 'Thomas',
-            last_name: 'Leroy',
-            company_name: null,
-            phone: '07 88 99 00 11',
-            plan: 'professional',
-            trial_ends_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'cancelled',
-            avatar_url: null,
-            created_at: '2024-07-12T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-            role: 'user'
-          },
-          {
-            id: 'user-7',
-            email: 'isabelle.moreau@email.com',
-            first_name: 'Isabelle',
-            last_name: 'Moreau',
-            company_name: 'Patrimoine Moreau',
-            phone: '06 77 66 55 44',
-            plan: 'starter',
-            trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'trial',
-            avatar_url: null,
-            created_at: '2024-12-10T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-            role: 'user'
-          },
-          {
-            id: 'user-8',
-            email: 'antoine.garcia@email.com',
-            first_name: 'Antoine',
-            last_name: 'Garcia',
-            company_name: 'SCI Garcia',
-            phone: '06 33 22 11 00',
-            plan: 'professional',
-            trial_ends_at: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'active',
-            avatar_url: null,
-            created_at: '2024-06-20T00:00:00.000Z',
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-            role: 'user'
-          }
-        ];
-        
-        setUsers(demoUsers);
-        setError('Impossible de se connecter à la base de données. Affichage des données de démonstration.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Une erreur est survenue');
-      }
+      // En cas d'erreur, afficher le message d'erreur
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue lors du chargement des utilisateurs');
+      console.error('Erreur détaillée:', err);
     } finally {
       setLoading(false);
     }
@@ -329,23 +171,30 @@ const AdminUsers: React.FC = () => {
         
         setFormSuccess('Utilisateur mis à jour avec succès');
       } else {
-        // Create new user
-        // Note: In a real app, this would use admin API to create users
-        // This is a simplified version for demonstration
-        const { data, error } = await supabase.auth.signUp({
+        // Create new user via auth.signUp
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
-          password: formData.password,
-          options: {
-            data: {
+          password: formData.password
+        });
+        
+        if (authError) throw authError;
+        
+        // Create profile manually since we're in admin mode
+        if (authData.user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authData.user.id,
+              email: formData.email,
               first_name: formData.first_name,
               last_name: formData.last_name,
               company_name: formData.company_name || null,
-              phone: formData.phone || null
-            }
-          }
-        });
-        
-        if (error) throw error;
+              phone: formData.phone || null,
+              plan: formData.plan
+            });
+          
+          if (profileError) throw profileError;
+        }
         
         // Log activity
         activityService.addActivity({
@@ -380,70 +229,9 @@ const AdminUsers: React.FC = () => {
       setEditingUser(null);
     } catch (err) {
       console.error('Error creating/updating user:', err);
-      
-      // Gestion des erreurs avec fallback pour mode démo
-      if (err instanceof Error && (
-        err.message.includes('Failed to fetch') ||
-        err.message.includes('timeout') ||
-        err.message.includes('NetworkError')
-      )) {
-        // En mode démo, simuler la création/modification
-        if (editingUser) {
-          // Simuler la mise à jour
-          setUsers(prev => prev.map(user => 
-            user.id === editingUser.id 
-              ? { 
-                  ...user, 
-                  first_name: formData.first_name,
-                  last_name: formData.last_name,
-                  company_name: formData.company_name || null,
-                  phone: formData.phone || null,
-                  plan: formData.plan,
-                  updated_at: new Date().toISOString()
-                }
-              : user
-          ));
-          setFormSuccess('Utilisateur mis à jour avec succès (mode démo)');
-        } else {
-          // Simuler la création
-          const newUser: User = {
-            id: 'demo-' + Date.now(),
-            email: formData.email,
-            first_name: formData.first_name,
-            last_name: formData.last_name,
-            company_name: formData.company_name || null,
-            phone: formData.phone || null,
-            plan: formData.plan,
-            trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-            subscription_status: 'trial',
-            avatar_url: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            role: 'user'
-          };
-          setUsers(prev => [newUser, ...prev]);
-          setFormSuccess('Utilisateur créé avec succès (mode démo)');
-        }
-        
-        // Reset form
-        setFormData({
-          email: '',
-          first_name: '',
-          last_name: '',
-          company_name: '',
-          phone: '',
-          plan: 'starter',
-          password: '',
-          confirmPassword: ''
-        });
-        
-        setShowUserForm(false);
-        setEditingUser(null);
-      } else {
-        setFormErrors({
-          submit: err instanceof Error ? err.message : 'Une erreur est survenue'
-        });
-      }
+      setFormErrors({
+        submit: err instanceof Error ? err.message : 'Une erreur est survenue'
+      });
     } finally {
       setLoading(false);
     }
@@ -500,22 +288,7 @@ const AdminUsers: React.FC = () => {
       await loadUsers();
     } catch (err) {
       console.error('Error deleting user:', err);
-      
-      // Gestion des erreurs avec fallback pour mode démo
-      if (err instanceof Error && (
-        err.message.includes('Failed to fetch') ||
-        err.message.includes('timeout') ||
-        err.message.includes('NetworkError')
-      )) {
-        // En mode démo, simuler la suppression
-        setUsers(prev => prev.filter(user => user.id !== userId));
-        setError('Utilisateur supprimé avec succès (mode démo)');
-        
-        // Effacer le message après 3 secondes
-        setTimeout(() => setError(null), 3000);
-      } else {
-        setError(err instanceof Error ? err.message : 'Une erreur est survenue');
-      }
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
@@ -558,24 +331,7 @@ const AdminUsers: React.FC = () => {
       
     } catch (err) {
       console.error('Error changing user role:', err);
-      
-      // Gestion des erreurs avec fallback pour mode démo
-      if (err instanceof Error && (
-        err.message.includes('Failed to fetch') ||
-        err.message.includes('timeout') ||
-        err.message.includes('NetworkError')
-      )) {
-        // En mode démo, simuler le changement de rôle
-        setUsers(prev => prev.map(user => 
-          user.id === userId ? { ...user, role } : user
-        ));
-        setError('Rôle modifié avec succès (mode démo)');
-        
-        // Effacer le message après 3 secondes
-        setTimeout(() => setError(null), 3000);
-      } else {
-        setError(err instanceof Error ? err.message : 'Une erreur est survenue');
-      }
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
@@ -868,7 +624,7 @@ const AdminUsers: React.FC = () => {
           <p className="text-gray-600 mb-4">
             {searchTerm || filterPlan !== 'all' || filterStatus !== 'all'
               ? 'Aucun utilisateur ne correspond à vos critères de recherche.'
-              : 'Aucun utilisateur trouvé dans le système.'
+              : 'Aucun utilisateur n\'a encore créé de compte.'
             }
           </p>
           <button 

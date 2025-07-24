@@ -48,12 +48,24 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showEmailTemplateEditor, setShowEmailTemplateEditor] = useState(false);
   const [showMJMLTemplateEditor, setShowMJMLTemplateEditor] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   
   // Vérifier l'utilisateur au chargement
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
+      
+      // Récupérer aussi le profil complet pour vérifier le rôle
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        setCurrentUser(profile);
+      }
     };
     
     if (isOpen) {
@@ -62,7 +74,7 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
   }, [isOpen]);
   
   // Vérifier les droits d'accès
-  const userIsAdmin = isUserAdmin(user);
+  const userIsAdmin = isUserAdmin(user) || currentUser?.role === 'admin';
 
   if (!isOpen) return null;
   
