@@ -1,30 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Settings, 
-  Database, 
   Users, 
   Shield, 
-  Activity,
   X,
   ChevronRight,
   BarChart3,
-  HardDrive,
   Mail,
   Send
 } from 'lucide-react';
-import SupabaseConnectionCheck from '../SupabaseConnectionCheck';
 import MailServerConfig from './MailServerConfig';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import MJMLTemplateEditor from './MJMLTemplateEditor';
 import EmailTemplates from './EmailTemplates';
 import EmailQueue from './EmailQueue.tsx';
 import AdminUsers from './AdminUsers';
-import AdminSecurity from './AdminSecurity';
 import AdminLogs from './AdminLogs';
 import AdminDashboard from './AdminDashboard';
-import AdminBackup from './AdminBackup';
-import AdminSystemMonitoring from './AdminSystemMonitoring';
-import AdminSettings from './AdminSettings';
 import { supabase } from '../../lib/supabase';
 
 // Fonction pour vérifier si l'utilisateur est admin
@@ -54,7 +45,7 @@ interface AdminMenuProps {
 
 const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<string>('database');
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showEmailTemplateEditor, setShowEmailTemplateEditor] = useState(false);
   const [showMJMLTemplateEditor, setShowMJMLTemplateEditor] = useState(false);
   
@@ -112,16 +103,11 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
 
   const tabs = [
     { id: 'dashboard', label: 'Tableau de bord', icon: BarChart3 },
-    { id: 'database', label: 'Base de données', icon: Database },
     { id: 'users', label: 'Utilisateurs', icon: Users },
-    { id: 'security', label: 'Sécurité', icon: Shield },
-    { id: 'monitoring', label: 'Monitoring', icon: Activity },
-    { id: 'backup', label: 'Sauvegardes', icon: HardDrive },
     { id: 'mail', label: 'Serveur mail', icon: Mail },
     { id: 'email_templates', label: 'Templates mail', icon: Send },
     { id: 'email_queue', label: 'File d\'attente', icon: Mail },
-    { id: 'logs', label: 'Journaux', icon: Activity },
-    { id: 'settings', label: 'Paramètres', icon: Settings }
+    { id: 'logs', label: 'Journaux', icon: BarChart3 }
   ];
 
   const renderTabContent = () => {
@@ -129,13 +115,6 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
       case 'dashboard':
         return (
           <AdminDashboard />
-        );
-      case 'database':
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Connexion à la base de données</h3>
-            <SupabaseConnectionCheck />
-          </div>
         );
       case 'users':
         return (
@@ -148,18 +127,6 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
             </div>
             <AdminUsers />
           </div>
-        );
-      case 'security':
-        return (
-          <AdminSecurity />
-        );
-      case 'monitoring':
-        return (
-          <AdminSystemMonitoring />
-        );
-      case 'backup':
-        return (
-          <AdminBackup />
         );
       case 'mail':
         return (
@@ -179,10 +146,6 @@ const AdminMenu: React.FC<AdminMenuProps> = ({ isOpen, onClose }) => {
       case 'logs':
         return (
           <AdminLogs />
-        );
-      case 'settings':
-        return (
-          <AdminSettings />
         );
       default:
         return <AdminDashboard />;

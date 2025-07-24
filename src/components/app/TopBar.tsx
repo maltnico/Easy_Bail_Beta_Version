@@ -1,15 +1,30 @@
-import React, { useState } from 'react';
-import { Search, User, ChevronDown, LogOut, Shield, X, FileText, Building, Users, DollarSign } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, User, ChevronDown, LogOut, Shield, X, FileText, Building, Users, DollarSign, Crown, Circle, AlertTriangle, Database, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import NotificationBell from './NotificationBell';
 import AdminMenu from './AdminMenu';
 import { useProperties } from '../../hooks/useProperties';
 import { useTenants } from '../../hooks/useTenants';
 import { SimpleThemeToggle } from '../ThemeToggle';
+import { supabase, isConnected } from '../../lib/supabase';
+import { checkSupabaseConnection } from '../../utils/checkSupabaseConnection';
 
 interface TopBarProps {
   onLogout?: () => void;
   onNavigateToSection?: (section: string) => void;
+}
+
+interface ActiveUser {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  company_name?: string;
+  plan: string;
+  role?: string;
+  subscription_status: string;
+  created_at: string;
+  last_sign_in_at?: string;
 }
 
 // Fonction pour vérifier si l'utilisateur est admin
@@ -41,9 +56,167 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<any>(null);
+  const [checkingConnection, setCheckingConnection] = useState(false);
   
   // Vérifier si l'utilisateur est admin
   const userIsAdmin = isUserAdmin(user);
+
+  // Vérifier la connexion Supabase au chargement
+  useEffect(() => {
+    checkSupabaseConnectionStatus();
+  }, []);
+
+  // Charger les utilisateurs actifs quand le menu s'ouvre
+  useEffect(() => {
+    if (showUserMenu) {
+      loadActiveUsers();
+    }
+  }, [showUserMenu]);
+
+  const checkSupabaseConnectionStatus = async () => {
+    setCheckingConnection(true);
+    try {
+      const status = await checkSupabaseConnection();
+      setConnectionStatus(status);
+    } catch (error) {
+      setConnectionStatus({
+        connected: false,
+        error: `Erreur lors de la vérification: ${(error as Error).message}`
+      });
+    } finally {
+      setCheckingConnection(false);
+    }
+  };
+
+  const loadActiveUsers = async () => {
+    setLoadingUsers(true);
+    
+    // Vérifier d'abord la connexion
+    if (!connectionStatus?.connected) {
+      console.warn('Supabase non connecté, utilisation des données de démonstration');
+      setActiveUsers([
+        {
+          id: '1',
+          email: 'admin@easybail.pro',
+          first_name: 'Admin',
+          last_name: 'EasyBail',
+          company_name: 'EasyBail Pro',
+          plan: 'expert',
+          role: 'admin',
+          subscription_status: 'active',
+          created_at: new Date().toISOString(),
+          last_sign_in_at: new Date().toISOString()
+        },
+        {
+          id: '2',
+          email: 'demo@example.com',
+          first_name: 'Demo',
+          last_name: 'User',
+          company_name: 'Demo Company',
+          plan: 'professional',
+          subscription_status: 'active',
+          created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          last_sign_in_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          id: '3',
+          email: 'user@test.com',
+          first_name: 'Test',
+          last_name: 'User',
+          plan: 'starter',
+          subscription_status: 'active',
+          created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+          last_sign_in_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        }
+      ]);
+      setLoadingUsers(false);
+      return;
+    }
+
+    try {
+      // Récupérer tous les profils utilisateurs actifs
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('subscription_status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erreur lors du chargement des utilisateurs:', error);
+        // En cas d'erreur, utiliser des données de démonstration
+        setActiveUsers([
+          {
+            id: '1',
+            email: 'admin@easybail.pro',
+            first_name: 'Admin',
+            last_name: 'EasyBail',
+            company_name: 'EasyBail Pro',
+            plan: 'expert',
+            role: 'admin',
+            subscription_status: 'active',
+            created_at: new Date().toISOString(),
+            last_sign_in_at: new Date().toISOString()
+          },
+          {
+            id: '2',
+            email: 'demo@example.com',
+            first_name: 'Demo',
+            last_name: 'User',
+            company_name: 'Demo Company',
+            plan: 'professional',
+            subscription_status: 'active',
+            created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+            last_sign_in_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            id: '3',
+            email: 'user@test.com',
+            first_name: 'Test',
+            last_name: 'User',
+            plan: 'starter',
+            subscription_status: 'active',
+            created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+            last_sign_in_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+          }
+        ]);
+      } else {
+        setActiveUsers(profiles || []);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des utilisateurs:', error);
+      // Utiliser des données de démonstration en cas d'erreur
+      setActiveUsers([
+        {
+          id: '1',
+          email: 'admin@easybail.pro',
+          first_name: 'Admin',
+          last_name: 'EasyBail',
+          company_name: 'EasyBail Pro',
+          plan: 'expert',
+          role: 'admin',
+          subscription_status: 'active',
+          created_at: new Date().toISOString(),
+          last_sign_in_at: new Date().toISOString()
+        },
+        {
+          id: '2',
+          email: 'demo@example.com',
+          first_name: 'Demo',
+          last_name: 'User',
+          company_name: 'Demo Company',
+          plan: 'professional',
+          subscription_status: 'active',
+          created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          last_sign_in_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+        }
+      ]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
   const handleSignOut = async () => {
     try {
@@ -173,6 +346,54 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
     }
   };
 
+  const getPlanColor = (plan: string) => {
+    switch (plan) {
+      case 'expert': return 'text-purple-600 bg-purple-100';
+      case 'professional': return 'text-blue-600 bg-blue-100';
+      case 'starter': return 'text-green-600 bg-green-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getPlanLabel = (plan: string) => {
+    switch (plan) {
+      case 'expert': return 'Expert';
+      case 'professional': return 'Pro';
+      case 'starter': return 'Starter';
+      default: return plan;
+    }
+  };
+
+  const formatLastSeen = (lastSignIn: string | undefined) => {
+    if (!lastSignIn) return 'Jamais connecté';
+    
+    const now = new Date();
+    const lastSeen = new Date(lastSignIn);
+    const diffMs = now.getTime() - lastSeen.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 5) return 'En ligne';
+    if (diffMins < 60) return `Il y a ${diffMins} min`;
+    if (diffHours < 24) return `Il y a ${diffHours}h`;
+    if (diffDays < 7) return `Il y a ${diffDays}j`;
+    return lastSeen.toLocaleDateString('fr-FR');
+  };
+
+  const getStatusColor = (lastSignIn: string | undefined) => {
+    if (!lastSignIn) return 'text-gray-400';
+    
+    const now = new Date();
+    const lastSeen = new Date(lastSignIn);
+    const diffMs = now.getTime() - lastSeen.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+
+    if (diffMins < 5) return 'text-green-500';
+    if (diffMins < 60) return 'text-yellow-500';
+    return 'text-gray-400';
+  };
+
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -198,8 +419,7 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
             )}
             
             {/* Résultats de recherche */}
-            {showSearchResults && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50 max-h-96 overflow-y-auto">
+            {showSearchResults && (<div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50 max-h-96 overflow-y-auto">
                 {searchResults.length > 0 ? (
                   <>
                     <div className="px-4 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-100 dark:border-gray-700">
@@ -300,48 +520,167 @@ const TopBar: React.FC<TopBarProps> = ({ onLogout, onNavigateToSection }) => {
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
-                <button
-                  onClick={() => {
-                    if (onNavigateToSection) {
-                      onNavigateToSection('settings');
-                    }
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  Mon profil
-                </button>
-                <button
-                  onClick={() => {
-                    if (onNavigateToSection) {
-                      onNavigateToSection('settings');
-                    }
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  Paramètres
-                </button>
-                <button
-                  onClick={() => {
-                    if (onNavigateToSection) {
-                      onNavigateToSection('settings');
-                    }
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  Facturation
-                </button>
-                <hr className="my-2 border-gray-200 dark:border-gray-600" />
-                <button
-                  onClick={handleSignOut}
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Se déconnecter
-                </button>
+              <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50 max-h-96 overflow-y-auto">
+                {/* Section État de la connexion Supabase */}
+                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      État de la connexion
+                    </div>
+                    <button
+                      onClick={checkSupabaseConnectionStatus}
+                      disabled={checkingConnection}
+                      className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                    >
+                      {checkingConnection ? (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                    </button>
+                  </div>
+                  
+                  {connectionStatus ? (
+                    <div className={`flex items-center space-x-2 p-2 rounded-lg ${
+                      connectionStatus.connected 
+                        ? 'bg-green-50 dark:bg-green-900/20' 
+                        : 'bg-red-50 dark:bg-red-900/20'
+                    }`}>
+                      {connectionStatus.connected ? (
+                        <Database className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-medium ${
+                          connectionStatus.connected ? 'text-green-700' : 'text-red-700'
+                        }`}>
+                          {connectionStatus.connected ? 'Supabase connecté' : 'Supabase déconnecté'}
+                        </p>
+                        {!connectionStatus.connected && (
+                          <p className="text-xs text-red-600 truncate">
+                            Mode démonstration actif
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700">
+                      <Database className="h-4 w-4 text-gray-400 animate-pulse" />
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Vérification...</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section Mon Profil */}
+                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                    Mon Profil
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (onNavigateToSection) {
+                        onNavigateToSection('settings');
+                      }
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full text-left block px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded"
+                  >
+                    Paramètres
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (onNavigateToSection) {
+                        onNavigateToSection('settings');
+                      }
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full text-left block px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded"
+                  >
+                    Facturation
+                  </button>
+                </div>
+
+                {/* Section Utilisateurs Actifs */}
+                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      Utilisateurs Actifs
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {!connectionStatus?.connected && (
+                        <span className="text-xs text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded-full">
+                          Demo
+                        </span>
+                      )}
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
+                        {activeUsers.length} compte(s)
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {loadingUsers ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {activeUsers.map((activeUser) => (
+                        <div
+                          key={activeUser.id}
+                          className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <div className="relative">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              activeUser.role === 'admin' ? 'bg-purple-600' : 'bg-blue-600'
+                            }`}>
+                              {activeUser.role === 'admin' ? (
+                                <Crown className="h-4 w-4 text-white" />
+                              ) : (
+                                <User className="h-4 w-4 text-white" />
+                              )}
+                            </div>
+                            <Circle 
+                              className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 ${getStatusColor(activeUser.last_sign_in_at)} fill-current`}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {activeUser.first_name} {activeUser.last_name}
+                              </p>
+                              {activeUser.role === 'admin' && (
+                                <Crown className="h-3 w-3 text-purple-600" />
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {activeUser.email}
+                              </p>
+                              <span className={`text-xs px-1.5 py-0.5 rounded-full ${getPlanColor(activeUser.plan)}`}>
+                                {getPlanLabel(activeUser.plan)}
+                              </span>
+                            </div>
+                            <p className={`text-xs ${getStatusColor(activeUser.last_sign_in_at)}`}>
+                              {formatLastSeen(activeUser.last_sign_in_at)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section Déconnexion */}
+                <div className="px-4 py-2">
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full text-left px-2 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center rounded"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Se déconnecter
+                  </button>
+                </div>
               </div>
             )}
           </div>
